@@ -1,5 +1,6 @@
 import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import { ValidationPipe } from '@nestjs/common';
 import { AppModule } from './app.module';
 import { execSync, exec } from 'child_process';
 import * as fs from 'fs';
@@ -77,6 +78,15 @@ process.on('SIGINT', () => {
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+
+  // Validación automática de todos los DTOs usando class-validator
+  app.useGlobalPipes(
+    new ValidationPipe({
+      whitelist: true,        // elimina propiedades no declaradas en el DTO
+      forbidNonWhitelisted: true,
+      transform: true,        // convierte tipos automáticamente (string → number, etc.)
+    }),
+  );
 
   const config = new DocumentBuilder()
     .setTitle('Products Service')
