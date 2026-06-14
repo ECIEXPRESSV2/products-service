@@ -7,26 +7,14 @@ import { CategoryService } from './services/category.service';
 import { CATEGORY_SERVICE } from './services/category.service.interface';
 import { CategoryController } from './controllers/category.controller';
 import { RabbitMQModule } from '../../messaging/rabbitmq.module';
+import { AuditModule } from '../audit/audit.module';
 
-/**
- * Módulo autocontenido de la feature "Categories".
- * Encapsula todo lo que necesita: entidad, repositorio, servicio y controlador.
- * Se importa una sola vez en AppModule.
- */
 @Module({
-  imports: [TypeOrmModule.forFeature([Category]), RabbitMQModule],
+  imports: [TypeOrmModule.forFeature([Category]), RabbitMQModule, AuditModule],
   controllers: [CategoryController],
   providers: [
-    // Repositorio: ligamos la interfaz a la implementación concreta
-    {
-      provide: CATEGORY_REPOSITORY,
-      useClass: CategoryRepository,
-    },
-    // Servicio: ligamos la interfaz a la implementación concreta
-    {
-      provide: CATEGORY_SERVICE,
-      useClass: CategoryService,
-    },
+    { provide: CATEGORY_REPOSITORY, useClass: CategoryRepository },
+    { provide: CATEGORY_SERVICE, useClass: CategoryService },
   ],
   exports: [CATEGORY_SERVICE],
 })

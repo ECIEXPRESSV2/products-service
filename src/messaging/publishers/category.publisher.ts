@@ -17,8 +17,7 @@ export class CategoryPublisher {
 
   emit(event: string, payload: unknown): void {
     this.client.emit(event, payload).subscribe({
-      error: (err: unknown) =>
-        this.logger.error(`Failed to emit "${event}"`, err),
+      error: (err: unknown) => this.logger.error(`Failed to emit "${event}"`, err),
     });
   }
 
