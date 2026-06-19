@@ -89,9 +89,13 @@ export class Product {
   @Column({ name: 'image_url', type: 'varchar', length: 500, nullable: true })
   imageUrl: string | null;
 
-  @ApiProperty({ example: 50, description: 'Unidades disponibles en inventario', minimum: 0 })
+  @ApiProperty({ example: 50, description: 'Unidades disponibles en inventario (stock físico total)', minimum: 0 })
   @Column({ type: 'int', default: 0 })
   stock: number;
+
+  @ApiProperty({ example: 3, description: 'Unidades reservadas para pedidos pendientes de confirmación', minimum: 0 })
+  @Column({ name: 'reserved_stock', type: 'int', default: 0 })
+  reservedStock: number;
 
   @ApiProperty({ example: 5, description: 'Stock mínimo; por debajo de este valor el producto aparece en alertas de inventario bajo', minimum: 0 })
   @Column({ name: 'min_stock', type: 'int', default: 0 })

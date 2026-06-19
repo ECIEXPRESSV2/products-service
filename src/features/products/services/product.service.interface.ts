@@ -21,6 +21,9 @@ export interface IProductService {
   activate(id: string): Promise<Product>;
   deactivate(id: string): Promise<Product>;
   adjustStock(id: string, dto: AdjustStockDto): Promise<Product>;
+  reserveStock(productId: string, quantity: number, orderId: string): Promise<void>;
+  releaseStock(productId: string, quantity: number, orderId: string): Promise<void>;
+  confirmReservation(productId: string, quantity: number, orderId: string): Promise<void>;
   remove(id: string): Promise<void>;
 }
 

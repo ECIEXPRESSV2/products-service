@@ -14,6 +14,9 @@ import { Product } from '../entities/product.entity';
 import { ProductPublisher } from '../../../messaging/publishers/product.publisher';
 import { AuditService } from '../../audit/audit.service';
 import { AuditAction } from '../../audit/entities/audit-log.entity';
+import type { IInventoryService } from '../../inventory/services/inventory.service.interface';
+import { INVENTORY_SERVICE } from '../../inventory/services/inventory.service.interface';
+import { MovementType } from '../../inventory/entities/inventory-movement.entity';
 
 @Injectable()
 export class ProductService implements IProductService {
@@ -24,6 +27,8 @@ export class ProductService implements IProductService {
     private readonly categoryRepository: ICategoryRepository,
     private readonly publisher: ProductPublisher,
     private readonly auditService: AuditService,
+    @Inject(INVENTORY_SERVICE)
+    private readonly inventoryService: IInventoryService,
     @Inject(WINSTON_MODULE_NEST_PROVIDER)
     private readonly logger: LoggerService,
   ) {}
@@ -185,15 +190,30 @@ export class ProductService implements IProductService {
     const product = await this.findById(id);
 
     let newStock: number;
+    let movementType: MovementType;
+
     if (dto.operation === StockOperation.SET) {
       newStock = dto.quantity;
+      movementType = MovementType.ADJUSTMENT;
+      if (newStock < product.reservedStock) {
+        throw new ConflictException(
+          `El stock no puede ser menor al stock reservado (${product.reservedStock} unidades reservadas)`,
+        );
+      }
     } else if (dto.operation === StockOperation.ADD) {
       newStock = product.stock + dto.quantity;
+      movementType = MovementType.PURCHASE;
     } else {
       newStock = product.stock - dto.quantity;
+      movementType = MovementType.ADJUSTMENT;
       if (newStock < 0) {
         throw new ConflictException(
           `Stock insuficiente. Stock actual: ${product.stock}, cantidad a restar: ${dto.quantity}`,
+        );
+      }
+      if (newStock < product.reservedStock) {
+        throw new ConflictException(
+          `El stock resultante (${newStock}) sería menor al stock reservado (${product.reservedStock})`,
         );
       }
     }
@@ -209,8 +229,86 @@ export class ProductService implements IProductService {
       afterData: { ...this.toAuditData(updated), stock: newStock },
     });
 
+    await this.inventoryService.logMovement({
+      productId: id,
+      storeId: updated.storeId,
+      type: movementType,
+      quantity: dto.quantity,
+      stockBefore: product.stock,
+      stockAfter: newStock,
+      reservedStockBefore: product.reservedStock,
+      reservedStockAfter: product.reservedStock,
+      notes: dto.notes,
+    });
+
     this.publisher.productUpdated({ id, storeId: updated.storeId, stock: newStock });
     return updated;
+  }
+
+  async reserveStock(productId: string, quantity: number, orderId: string): Promise<void> {
+    this.logger.log(`Reserving ${quantity} units product=${productId} order=${orderId}`, ProductService.name);
+    const product = await this.findById(productId);
+    const available = product.stock - product.reservedStock;
+    if (available < quantity) {
+      throw new ConflictException(
+        `Stock disponible insuficiente. Disponible: ${available}, requerido: ${quantity}`,
+      );
+    }
+    const newReserved = product.reservedStock + quantity;
+    await this.productRepository.adjustReservedStock(productId, newReserved);
+    await this.inventoryService.logMovement({
+      productId,
+      storeId: product.storeId,
+      type: MovementType.RESERVATION,
+      quantity,
+      stockBefore: product.stock,
+      stockAfter: product.stock,
+      reservedStockBefore: product.reservedStock,
+      reservedStockAfter: newReserved,
+      referenceId: orderId,
+    });
+  }
+
+  async releaseStock(productId: string, quantity: number, orderId: string): Promise<void> {
+    this.logger.log(`Releasing ${quantity} units product=${productId} order=${orderId}`, ProductService.name);
+    const product = await this.findById(productId);
+    const newReserved = Math.max(0, product.reservedStock - quantity);
+    await this.productRepository.adjustReservedStock(productId, newReserved);
+    await this.inventoryService.logMovement({
+      productId,
+      storeId: product.storeId,
+      type: MovementType.RELEASE,
+      quantity,
+      stockBefore: product.stock,
+      stockAfter: product.stock,
+      reservedStockBefore: product.reservedStock,
+      reservedStockAfter: newReserved,
+      referenceId: orderId,
+    });
+  }
+
+  async confirmReservation(productId: string, quantity: number, orderId: string): Promise<void> {
+    this.logger.log(`Confirming reservation ${quantity} units product=${productId} order=${orderId}`, ProductService.name);
+    const product = await this.findById(productId);
+    const newStock = product.stock - quantity;
+    if (newStock < 0) {
+      throw new ConflictException(
+        `Stock insuficiente para confirmar la venta. Stock: ${product.stock}, cantidad: ${quantity}`,
+      );
+    }
+    const newReserved = Math.max(0, product.reservedStock - quantity);
+    await this.productRepository.setStockAndReserved(productId, newStock, newReserved);
+    await this.inventoryService.logMovement({
+      productId,
+      storeId: product.storeId,
+      type: MovementType.SALE,
+      quantity,
+      stockBefore: product.stock,
+      stockAfter: newStock,
+      reservedStockBefore: product.reservedStock,
+      reservedStockAfter: newReserved,
+      referenceId: orderId,
+    });
   }
 
   async remove(id: string): Promise<void> {

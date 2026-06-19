@@ -1,5 +1,7 @@
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
+import { MicroserviceOptions, Transport } from '@nestjs/microservices';
+import { ConfigService } from '@nestjs/config';
 import { WINSTON_MODULE_NEST_PROVIDER } from 'nest-winston';
 import { AppModule } from './app.module';
 import { setupSwagger } from './config/swagger.config';
@@ -86,6 +88,19 @@ async function bootstrap() {
       transform: true,
     }),
   );
+
+  // Consumer de eventos del Order Service (order.placed, order.confirmed, order.cancelled)
+  const configService = app.get(ConfigService);
+  app.connectMicroservice<MicroserviceOptions>({
+    transport: Transport.RMQ,
+    options: {
+      urls: [configService.get<string>('RABBITMQ_URL', 'amqp://guest:guest@localhost:5672')],
+      queue: 'order_events',
+      queueOptions: { durable: true },
+      noAck: false,
+    },
+  });
+  await app.startAllMicroservices();
 
   setupSwagger(app);
 

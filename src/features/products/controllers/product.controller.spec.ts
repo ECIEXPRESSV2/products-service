@@ -43,6 +43,7 @@ function makeProduct(overrides: Partial<Product> = {}): Product {
     sku: null,
     imageUrl: null,
     stock: 20,
+    reservedStock: 0,
     minStock: 5,
     isActive: true,
     sortOrder: 0,
@@ -74,6 +75,9 @@ describe('ProductController', () => {
       activate: jest.fn(),
       deactivate: jest.fn(),
       adjustStock: jest.fn(),
+      reserveStock: jest.fn(),
+      releaseStock: jest.fn(),
+      confirmReservation: jest.fn(),
       remove: jest.fn(),
     };
 

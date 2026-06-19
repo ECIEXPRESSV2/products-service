@@ -12,6 +12,8 @@ import { Product } from '../entities/product.entity';
 import { Category } from '../../categories/entities/category.entity';
 import { CreateProductDto } from '../dto/create-product.dto';
 import { StockOperation } from '../dto/adjust-stock.dto';
+import type { IInventoryService } from '../../inventory/services/inventory.service.interface';
+import { INVENTORY_SERVICE } from '../../inventory/services/inventory.service.interface';
 
 const STORE_ID = 'f47ac10b-58cc-4372-a567-0e02b2c3d479';
 const PRODUCT_ID = 'b2cc188e-9bf9-4888-aa12-ace4e6543111';
@@ -48,6 +50,7 @@ function makeProduct(overrides: Partial<Product> = {}): Product {
     sku: null,
     imageUrl: null,
     stock: 20,
+    reservedStock: 0,
     minStock: 5,
     isActive: true,
     sortOrder: 0,
@@ -63,6 +66,7 @@ describe('ProductService', () => {
   let categoryRepo: jest.Mocked<ICategoryRepository>;
   let publisher: jest.Mocked<ProductPublisher>;
   let auditService: jest.Mocked<AuditService>;
+  let inventoryService: jest.Mocked<IInventoryService>;
 
   beforeEach(async () => {
     const repoMock: jest.Mocked<IProductRepository> = {
@@ -78,6 +82,8 @@ describe('ProductService', () => {
       create: jest.fn(),
       update: jest.fn(),
       setStock: jest.fn(),
+      adjustReservedStock: jest.fn(),
+      setStockAndReserved: jest.fn(),
       setActive: jest.fn(),
       softDelete: jest.fn(),
       existsById: jest.fn(),
@@ -106,6 +112,14 @@ describe('ProductService', () => {
       log: jest.fn().mockResolvedValue(undefined),
     } as unknown as jest.Mocked<AuditService>;
 
+    const inventoryMock: jest.Mocked<IInventoryService> = {
+      logMovement: jest.fn().mockResolvedValue(undefined),
+      findByProduct: jest.fn(),
+      findByStore: jest.fn(),
+      find: jest.fn(),
+      findById: jest.fn(),
+    };
+
     const loggerMock = { log: jest.fn(), warn: jest.fn(), error: jest.fn() };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -115,6 +129,7 @@ describe('ProductService', () => {
         { provide: CATEGORY_REPOSITORY, useValue: categoryRepoMock },
         { provide: ProductPublisher, useValue: publisherMock },
         { provide: AuditService, useValue: auditMock },
+        { provide: INVENTORY_SERVICE, useValue: inventoryMock },
         { provide: WINSTON_MODULE_NEST_PROVIDER, useValue: loggerMock },
       ],
     }).compile();
@@ -124,6 +139,7 @@ describe('ProductService', () => {
     categoryRepo = categoryRepoMock;
     publisher = publisherMock;
     auditService = auditMock;
+    inventoryService = inventoryMock;
   });
 
   // ── findAll / findAllPaginated ───────────────────────────────────────────
@@ -447,7 +463,7 @@ describe('ProductService', () => {
 
   describe('adjustStock', () => {
     it('sets stock to exact value with SET operation', async () => {
-      const product = makeProduct({ stock: 10 });
+      const product = makeProduct({ stock: 10, reservedStock: 0 });
       const updated = makeProduct({ stock: 50 });
       repo.findById.mockResolvedValue(product);
       repo.setStock.mockResolvedValue(updated);
@@ -458,7 +474,7 @@ describe('ProductService', () => {
     });
 
     it('adds units to current stock with ADD operation', async () => {
-      const product = makeProduct({ stock: 10 });
+      const product = makeProduct({ stock: 10, reservedStock: 0 });
       repo.findById.mockResolvedValue(product);
       repo.setStock.mockResolvedValue(makeProduct({ stock: 25 }));
 
@@ -468,7 +484,7 @@ describe('ProductService', () => {
     });
 
     it('subtracts units from current stock with SUBTRACT operation', async () => {
-      const product = makeProduct({ stock: 20 });
+      const product = makeProduct({ stock: 20, reservedStock: 0 });
       repo.findById.mockResolvedValue(product);
       repo.setStock.mockResolvedValue(makeProduct({ stock: 12 }));
 
@@ -478,12 +494,161 @@ describe('ProductService', () => {
     });
 
     it('throws ConflictException when SUBTRACT would result in negative stock', async () => {
-      repo.findById.mockResolvedValue(makeProduct({ stock: 5 }));
+      repo.findById.mockResolvedValue(makeProduct({ stock: 5, reservedStock: 0 }));
 
       await expect(
         service.adjustStock(PRODUCT_ID, { operation: StockOperation.SUBTRACT, quantity: 10 }),
       ).rejects.toThrow(ConflictException);
       expect(repo.setStock).not.toHaveBeenCalled();
+    });
+
+    it('throws ConflictException when SUBTRACT would leave stock below reservedStock', async () => {
+      repo.findById.mockResolvedValue(makeProduct({ stock: 10, reservedStock: 8 }));
+
+      await expect(
+        service.adjustStock(PRODUCT_ID, { operation: StockOperation.SUBTRACT, quantity: 5 }),
+      ).rejects.toThrow(ConflictException);
+      expect(repo.setStock).not.toHaveBeenCalled();
+    });
+
+    it('throws ConflictException when SET value is below reservedStock', async () => {
+      repo.findById.mockResolvedValue(makeProduct({ stock: 20, reservedStock: 10 }));
+
+      await expect(
+        service.adjustStock(PRODUCT_ID, { operation: StockOperation.SET, quantity: 5 }),
+      ).rejects.toThrow(ConflictException);
+      expect(repo.setStock).not.toHaveBeenCalled();
+    });
+
+    it('logs an inventory movement after a successful adjustment', async () => {
+      const product = makeProduct({ stock: 10, reservedStock: 0 });
+      repo.findById.mockResolvedValue(product);
+      repo.setStock.mockResolvedValue(makeProduct({ stock: 20 }));
+
+      await service.adjustStock(PRODUCT_ID, { operation: StockOperation.ADD, quantity: 10, notes: 'Reabastecimiento' });
+
+      expect(inventoryService.logMovement).toHaveBeenCalledWith(
+        expect.objectContaining({
+          productId: PRODUCT_ID,
+          quantity: 10,
+          stockBefore: 10,
+          stockAfter: 20,
+          notes: 'Reabastecimiento',
+        }),
+      );
+    });
+  });
+
+  // ── reserveStock ─────────────────────────────────────────────────────────
+
+  describe('reserveStock', () => {
+    it('increases reservedStock when available stock is sufficient', async () => {
+      const product = makeProduct({ stock: 20, reservedStock: 5 });
+      repo.findById.mockResolvedValue(product);
+      repo.adjustReservedStock.mockResolvedValue(makeProduct({ stock: 20, reservedStock: 8 }));
+
+      await service.reserveStock(PRODUCT_ID, 3, 'order-001');
+
+      expect(repo.adjustReservedStock).toHaveBeenCalledWith(PRODUCT_ID, 8);
+      expect(inventoryService.logMovement).toHaveBeenCalledWith(
+        expect.objectContaining({
+          productId: PRODUCT_ID,
+          quantity: 3,
+          stockBefore: 20,
+          stockAfter: 20,
+          reservedStockBefore: 5,
+          reservedStockAfter: 8,
+          referenceId: 'order-001',
+        }),
+      );
+    });
+
+    it('throws ConflictException when available stock is insufficient', async () => {
+      // stock=10, reservedStock=8 → available=2, requesting 5
+      repo.findById.mockResolvedValue(makeProduct({ stock: 10, reservedStock: 8 }));
+
+      await expect(service.reserveStock(PRODUCT_ID, 5, 'order-001')).rejects.toThrow(ConflictException);
+      expect(repo.adjustReservedStock).not.toHaveBeenCalled();
+    });
+
+    it('throws NotFoundException when product does not exist', async () => {
+      repo.findById.mockResolvedValue(null);
+
+      await expect(service.reserveStock(PRODUCT_ID, 1, 'order-001')).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  // ── releaseStock ─────────────────────────────────────────────────────────
+
+  describe('releaseStock', () => {
+    it('decreases reservedStock on cancellation', async () => {
+      const product = makeProduct({ stock: 20, reservedStock: 5 });
+      repo.findById.mockResolvedValue(product);
+      repo.adjustReservedStock.mockResolvedValue(makeProduct({ stock: 20, reservedStock: 2 }));
+
+      await service.releaseStock(PRODUCT_ID, 3, 'order-001');
+
+      expect(repo.adjustReservedStock).toHaveBeenCalledWith(PRODUCT_ID, 2);
+      expect(inventoryService.logMovement).toHaveBeenCalledWith(
+        expect.objectContaining({
+          quantity: 3,
+          reservedStockBefore: 5,
+          reservedStockAfter: 2,
+          referenceId: 'order-001',
+        }),
+      );
+    });
+
+    it('clamps reservedStock to 0 when release quantity exceeds current reserved', async () => {
+      repo.findById.mockResolvedValue(makeProduct({ stock: 20, reservedStock: 2 }));
+      repo.adjustReservedStock.mockResolvedValue(makeProduct({ stock: 20, reservedStock: 0 }));
+
+      await service.releaseStock(PRODUCT_ID, 10, 'order-001');
+
+      expect(repo.adjustReservedStock).toHaveBeenCalledWith(PRODUCT_ID, 0);
+    });
+
+    it('throws NotFoundException when product does not exist', async () => {
+      repo.findById.mockResolvedValue(null);
+
+      await expect(service.releaseStock(PRODUCT_ID, 1, 'order-001')).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  // ── confirmReservation ───────────────────────────────────────────────────
+
+  describe('confirmReservation', () => {
+    it('decrements both stock and reservedStock on confirmed sale', async () => {
+      const product = makeProduct({ stock: 20, reservedStock: 5 });
+      repo.findById.mockResolvedValue(product);
+      repo.setStockAndReserved.mockResolvedValue(makeProduct({ stock: 17, reservedStock: 2 }));
+
+      await service.confirmReservation(PRODUCT_ID, 3, 'order-001');
+
+      expect(repo.setStockAndReserved).toHaveBeenCalledWith(PRODUCT_ID, 17, 2);
+      expect(inventoryService.logMovement).toHaveBeenCalledWith(
+        expect.objectContaining({
+          quantity: 3,
+          stockBefore: 20,
+          stockAfter: 17,
+          reservedStockBefore: 5,
+          reservedStockAfter: 2,
+          referenceId: 'order-001',
+        }),
+      );
+    });
+
+    it('throws ConflictException when stock is insufficient to confirm', async () => {
+      repo.findById.mockResolvedValue(makeProduct({ stock: 2, reservedStock: 2 }));
+
+      await expect(service.confirmReservation(PRODUCT_ID, 5, 'order-001')).rejects.toThrow(ConflictException);
+      expect(repo.setStockAndReserved).not.toHaveBeenCalled();
+    });
+
+    it('throws NotFoundException when product does not exist', async () => {
+      repo.findById.mockResolvedValue(null);
+
+      await expect(service.confirmReservation(PRODUCT_ID, 1, 'order-001')).rejects.toThrow(NotFoundException);
     });
   });
 

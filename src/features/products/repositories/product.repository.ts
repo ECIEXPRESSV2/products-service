@@ -73,8 +73,9 @@ export class ProductRepository implements IProductRepository {
       .leftJoinAndSelect('product.category', 'category')
       .where('product.store_id = :storeId', { storeId })
       .andWhere('product.is_active = true')
-      .andWhere('product.stock <= product.min_stock')
-      .orderBy('product.stock', 'ASC')
+      .andWhere('product.min_stock > 0')
+      .andWhere('(product.stock - product.reserved_stock) <= product.min_stock')
+      .orderBy('(product.stock - product.reserved_stock)', 'ASC')
       .getMany();
   }
 
@@ -145,6 +146,18 @@ export class ProductRepository implements IProductRepository {
 
   async setStock(id: string, stock: number): Promise<Product | null> {
     const result = await this.orm.update(id, { stock });
+    if ((result.affected ?? 0) === 0) return null;
+    return this.orm.findOne({ where: { id }, relations: { category: true } });
+  }
+
+  async adjustReservedStock(id: string, newReservedStock: number): Promise<Product | null> {
+    const result = await this.orm.update(id, { reservedStock: newReservedStock });
+    if ((result.affected ?? 0) === 0) return null;
+    return this.orm.findOne({ where: { id }, relations: { category: true } });
+  }
+
+  async setStockAndReserved(id: string, newStock: number, newReservedStock: number): Promise<Product | null> {
+    const result = await this.orm.update(id, { stock: newStock, reservedStock: newReservedStock });
     if ((result.affected ?? 0) === 0) return null;
     return this.orm.findOne({ where: { id }, relations: { category: true } });
   }

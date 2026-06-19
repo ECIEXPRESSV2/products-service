@@ -186,8 +186,9 @@ describe('ProductRepository', () => {
       expect(orm.createQueryBuilder).toHaveBeenCalledWith('product');
       expect(qb.where).toHaveBeenCalledWith('product.store_id = :storeId', { storeId: STORE_ID });
       expect(qb.andWhere).toHaveBeenCalledWith('product.is_active = true');
-      expect(qb.andWhere).toHaveBeenCalledWith('product.stock <= product.min_stock');
-      expect(qb.orderBy).toHaveBeenCalledWith('product.stock', 'ASC');
+      expect(qb.andWhere).toHaveBeenCalledWith('product.min_stock > 0');
+      expect(qb.andWhere).toHaveBeenCalledWith('(product.stock - product.reserved_stock) <= product.min_stock');
+      expect(qb.orderBy).toHaveBeenCalledWith('(product.stock - product.reserved_stock)', 'ASC');
       expect(result).toBe(lowProducts);
     });
   });
