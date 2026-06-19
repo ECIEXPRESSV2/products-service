@@ -5,6 +5,7 @@ import { WinstonModule } from 'nest-winston';
 import databaseConfig from './config/database.config';
 import { buildWinstonConfig } from './config/logger.config';
 import { CategoriesModule } from './features/categories/categories.module';
+import { ProductsModule } from './features/products/products.module';
 
 @Module({
   imports: [
@@ -25,6 +26,7 @@ import { CategoriesModule } from './features/categories/categories.module';
     }),
 
     CategoriesModule,
+    ProductsModule,
   ],
 })
 export class AppModule {}
