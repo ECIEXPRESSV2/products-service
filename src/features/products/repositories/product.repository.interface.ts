@@ -22,6 +22,8 @@ export interface IProductRepository {
   create(dto: CreateProductDto): Promise<Product>;
   update(id: string, dto: UpdateProductDto): Promise<Product | null>;
   setStock(id: string, stock: number): Promise<Product | null>;
+  adjustReservedStock(id: string, newReservedStock: number): Promise<Product | null>;
+  setStockAndReserved(id: string, newStock: number, newReservedStock: number): Promise<Product | null>;
   softDelete(id: string): Promise<boolean>;
   setActive(id: string, isActive: boolean): Promise<Product | null>;
   existsById(id: string): Promise<boolean>;

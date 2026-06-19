@@ -6,12 +6,14 @@ import { PRODUCT_REPOSITORY } from './repositories/product.repository.interface'
 import { ProductService } from './services/product.service';
 import { PRODUCT_SERVICE } from './services/product.service.interface';
 import { ProductController } from './controllers/product.controller';
+import { StockConsumer } from './consumers/stock.consumer';
 import { RabbitMQModule } from '../../messaging/rabbitmq.module';
 import { AuditModule } from '../audit/audit.module';
 import { CategoriesModule } from '../categories/categories.module';
 import { CategoryRepository } from '../categories/repositories/category.repository';
 import { CATEGORY_REPOSITORY } from '../categories/repositories/category.repository.interface';
 import { Category } from '../categories/entities/category.entity';
+import { InventoryModule } from '../inventory/inventory.module';
 
 @Module({
   imports: [
@@ -19,8 +21,9 @@ import { Category } from '../categories/entities/category.entity';
     RabbitMQModule,
     AuditModule,
     CategoriesModule,
+    InventoryModule,
   ],
-  controllers: [ProductController],
+  controllers: [ProductController, StockConsumer],
   providers: [
     { provide: PRODUCT_REPOSITORY, useClass: ProductRepository },
     { provide: PRODUCT_SERVICE, useClass: ProductService },

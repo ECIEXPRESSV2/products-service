@@ -6,6 +6,8 @@ import databaseConfig from './config/database.config';
 import { buildWinstonConfig } from './config/logger.config';
 import { CategoriesModule } from './features/categories/categories.module';
 import { ProductsModule } from './features/products/products.module';
+import { PromotionsModule } from './features/promotions/promotions.module';
+import { InventoryModule } from './features/inventory/inventory.module';
 
 @Module({
   imports: [
@@ -27,6 +29,8 @@ import { ProductsModule } from './features/products/products.module';
 
     CategoriesModule,
     ProductsModule,
+    PromotionsModule,
+    InventoryModule,
   ],
 })
 export class AppModule {}

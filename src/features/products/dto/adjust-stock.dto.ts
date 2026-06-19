@@ -1,5 +1,5 @@
-import { ApiProperty } from '@nestjs/swagger';
-import { IsEnum, IsInt, Min } from 'class-validator';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { IsEnum, IsInt, IsOptional, IsString, Min } from 'class-validator';
 
 export enum StockOperation {
   SET = 'set',
@@ -25,4 +25,12 @@ export class AdjustStockDto {
   @IsInt()
   @Min(0)
   quantity: number;
+
+  @ApiPropertyOptional({
+    example: 'Reabastecimiento semanal',
+    description: 'Nota opcional registrada en el historial de inventario',
+  })
+  @IsOptional()
+  @IsString()
+  notes?: string;
 }

@@ -3,6 +3,7 @@ import { ClientsModule, Transport } from '@nestjs/microservices';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { CategoryPublisher, RABBITMQ_CLIENT } from './publishers/category.publisher';
 import { ProductPublisher } from './publishers/product.publisher';
+import { PromotionPublisher } from './publishers/promotion.publisher';
 
 @Module({
   imports: [
@@ -23,7 +24,7 @@ import { ProductPublisher } from './publishers/product.publisher';
       },
     ]),
   ],
-  providers: [CategoryPublisher, ProductPublisher],
-  exports: [CategoryPublisher, ProductPublisher],
+  providers: [CategoryPublisher, ProductPublisher, PromotionPublisher],
+  exports: [CategoryPublisher, ProductPublisher, PromotionPublisher],
 })
 export class RabbitMQModule {}
