@@ -9,8 +9,10 @@ import { ProductsModule } from './features/products/products.module';
 import { PromotionsModule } from './features/promotions/promotions.module';
 import { InventoryModule } from './features/inventory/inventory.module';
 import { StoresModule } from './features/stores/stores.module';
+import { CartModule } from './features/cart/cart.module';
 import { AuthModule } from './common/auth/auth.module';
 import { HealthModule } from './features/health/health.module';
+import { SharedBusModule } from './messaging/shared-bus/shared-bus.module';
 
 @Module({
   imports: [
@@ -30,6 +32,7 @@ import { HealthModule } from './features/health/health.module';
       useFactory: (config: ConfigService) => config.get('database') as object,
     }),
 
+    SharedBusModule,
     AuthModule,
     HealthModule,
     StoresModule,
@@ -37,6 +40,7 @@ import { HealthModule } from './features/health/health.module';
     ProductsModule,
     PromotionsModule,
     InventoryModule,
+    CartModule,
   ],
 })
 export class AppModule {}
