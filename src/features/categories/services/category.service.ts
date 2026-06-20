@@ -10,6 +10,7 @@ import { Category } from '../entities/category.entity';
 import { CategoryPublisher } from '../../../messaging/publishers/category.publisher';
 import { AuditService } from '../../audit/audit.service';
 import { AuditAction } from '../../audit/entities/audit-log.entity';
+import { StoreValidator } from '../../stores/services/store-validator';
 
 @Injectable()
 export class CategoryService implements ICategoryService {
@@ -18,6 +19,7 @@ export class CategoryService implements ICategoryService {
     private readonly categoryRepository: ICategoryRepository,
     private readonly publisher: CategoryPublisher,
     private readonly auditService: AuditService,
+    private readonly storeValidator: StoreValidator,
     @Inject(WINSTON_MODULE_NEST_PROVIDER)
     private readonly logger: LoggerService,
   ) {}
@@ -52,6 +54,7 @@ export class CategoryService implements ICategoryService {
       `Creating category slug="${dto.slug}" store=${dto.storeId}`,
       CategoryService.name,
     );
+    await this.storeValidator.assertActive(dto.storeId);
     await this.assertSlugIsUnique(dto.slug, dto.storeId);
     await this.assertParentExists(dto.parentId);
 

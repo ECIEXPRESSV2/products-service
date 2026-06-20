@@ -18,13 +18,16 @@ Microservicio de gestión de productos para una plataforma multi-tienda.
 - **Eventos**: Cada operación publica un evento en RabbitMQ (\`products_events\`)
 
 ### Autenticación
-Por el momento el servicio no requiere autenticación directa; la validación de identidad
-se delega al API Gateway upstream.
+Requiere \`Authorization: Bearer <token Firebase>\`. El token se valida por introspección
+contra \`GET /auth/validate\` en identity-service (no se verifica Firebase localmente).
+Autorización por rol (\`BUYER\`, \`VENDOR\`, \`ADMIN\`, \`ANALYST\`) vía \`@RequireRoles\`; \`ADMIN\`
+siempre tiene acceso.
       `.trim(),
     )
     .setVersion('1.0.0')
     .setContact('Backend Team', '', 'backend@products-service.io')
     .setLicense('UNLICENSED', '')
+    .addBearerAuth()
     .addTag('Categories', 'Gestión de categorías de productos')
     .addTag('Audit', 'Consulta de registros de auditoría')
     .addServer(`http://localhost:${process.env.PORT ?? 3000}`, 'Local development')

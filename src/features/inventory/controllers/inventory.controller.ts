@@ -1,17 +1,25 @@
 import { Controller, Get, Inject, Param, ParseUUIDPipe, Query } from '@nestjs/common';
 import {
+  ApiBearerAuth,
+  ApiForbiddenResponse,
   ApiNotFoundResponse,
   ApiOkResponse,
   ApiOperation,
   ApiQuery,
   ApiTags,
+  ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
 import type { IInventoryService } from '../services/inventory.service.interface';
 import { INVENTORY_SERVICE } from '../services/inventory.service.interface';
 import { InventoryMovement, MovementType } from '../entities/inventory-movement.entity';
 import { QueryMovementsDto } from '../dto/query-movements.dto';
+import { RequireRoles } from '../../../common/decorators/require-roles.decorator';
 
 @ApiTags('Inventory')
+@ApiBearerAuth()
+@ApiUnauthorizedResponse({ description: 'Token ausente o inválido' })
+@ApiForbiddenResponse({ description: 'Rol sin permiso para esta operación' })
+@RequireRoles('VENDOR', 'ADMIN', 'ANALYST')
 @Controller('inventory')
 export class InventoryController {
   constructor(

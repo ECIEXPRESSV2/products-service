@@ -8,6 +8,7 @@ import { CATEGORY_REPOSITORY } from '../../categories/repositories/category.repo
 import { ICategoryRepository } from '../../categories/repositories/category.repository.interface';
 import { ProductPublisher } from '../../../messaging/publishers/product.publisher';
 import { AuditService } from '../../audit/audit.service';
+import { StoreValidator } from '../../stores/services/store-validator';
 import { Product } from '../entities/product.entity';
 import { Category } from '../../categories/entities/category.entity';
 import { CreateProductDto } from '../dto/create-product.dto';
@@ -112,6 +113,10 @@ describe('ProductService', () => {
       log: jest.fn().mockResolvedValue(undefined),
     } as unknown as jest.Mocked<AuditService>;
 
+    const storeValidatorMock = {
+      assertActive: jest.fn().mockResolvedValue(undefined),
+    } as unknown as jest.Mocked<StoreValidator>;
+
     const inventoryMock: jest.Mocked<IInventoryService> = {
       logMovement: jest.fn().mockResolvedValue(undefined),
       findByProduct: jest.fn(),
@@ -129,6 +134,7 @@ describe('ProductService', () => {
         { provide: CATEGORY_REPOSITORY, useValue: categoryRepoMock },
         { provide: ProductPublisher, useValue: publisherMock },
         { provide: AuditService, useValue: auditMock },
+        { provide: StoreValidator, useValue: storeValidatorMock },
         { provide: INVENTORY_SERVICE, useValue: inventoryMock },
         { provide: WINSTON_MODULE_NEST_PROVIDER, useValue: loggerMock },
       ],
