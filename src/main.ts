@@ -79,6 +79,9 @@ async function bootstrap() {
   // Use Winston as the NestJS logger
   app.useLogger(app.get(WINSTON_MODULE_NEST_PROVIDER));
 
+  // El frontend llama al catálogo directamente desde el navegador.
+  app.enableCors({ origin: true, credentials: true });
+
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
