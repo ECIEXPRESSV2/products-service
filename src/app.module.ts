@@ -10,6 +10,7 @@ import { PromotionsModule } from './features/promotions/promotions.module';
 import { InventoryModule } from './features/inventory/inventory.module';
 import { StoresModule } from './features/stores/stores.module';
 import { AuthModule } from './common/auth/auth.module';
+import { HealthModule } from './features/health/health.module';
 
 @Module({
   imports: [
@@ -30,6 +31,7 @@ import { AuthModule } from './common/auth/auth.module';
     }),
 
     AuthModule,
+    HealthModule,
     StoresModule,
     CategoriesModule,
     ProductsModule,
