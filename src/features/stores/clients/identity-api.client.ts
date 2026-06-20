@@ -42,7 +42,7 @@ export class IdentityApiClient implements IIdentityApiClient {
     try {
       const { data } = await firstValueFrom(
         this.httpService.get<IdentityStoreResponseDto>(
-          `${this.baseUrl}/internal/stores/${storeId}`,
+          `${this.baseUrl}/stores/${storeId}`,
           { timeout: 5000 },
         ),
       );
