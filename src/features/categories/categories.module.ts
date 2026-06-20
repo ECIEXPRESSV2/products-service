@@ -8,9 +8,10 @@ import { CATEGORY_SERVICE } from './services/category.service.interface';
 import { CategoryController } from './controllers/category.controller';
 import { RabbitMQModule } from '../../messaging/rabbitmq.module';
 import { AuditModule } from '../audit/audit.module';
+import { StoresModule } from '../stores/stores.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Category]), RabbitMQModule, AuditModule],
+  imports: [TypeOrmModule.forFeature([Category]), RabbitMQModule, AuditModule, StoresModule],
   controllers: [CategoryController],
   providers: [
     { provide: CATEGORY_REPOSITORY, useClass: CategoryRepository },

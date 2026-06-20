@@ -17,6 +17,7 @@ import { AuditAction } from '../../audit/entities/audit-log.entity';
 import type { IInventoryService } from '../../inventory/services/inventory.service.interface';
 import { INVENTORY_SERVICE } from '../../inventory/services/inventory.service.interface';
 import { MovementType } from '../../inventory/entities/inventory-movement.entity';
+import { StoreValidator } from '../../stores/services/store-validator';
 
 @Injectable()
 export class ProductService implements IProductService {
@@ -27,6 +28,7 @@ export class ProductService implements IProductService {
     private readonly categoryRepository: ICategoryRepository,
     private readonly publisher: ProductPublisher,
     private readonly auditService: AuditService,
+    private readonly storeValidator: StoreValidator,
     @Inject(INVENTORY_SERVICE)
     private readonly inventoryService: IInventoryService,
     @Inject(WINSTON_MODULE_NEST_PROVIDER)
@@ -78,6 +80,7 @@ export class ProductService implements IProductService {
       ProductService.name,
     );
 
+    await this.storeValidator.assertActive(dto.storeId);
     await this.assertCategoryBelongsToStore(dto.categoryId, dto.storeId);
     await this.assertSlugIsUnique(dto.slug, dto.storeId);
     if (dto.sku) await this.assertSkuIsUnique(dto.sku, dto.storeId);

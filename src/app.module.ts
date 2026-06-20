@@ -8,6 +8,9 @@ import { CategoriesModule } from './features/categories/categories.module';
 import { ProductsModule } from './features/products/products.module';
 import { PromotionsModule } from './features/promotions/promotions.module';
 import { InventoryModule } from './features/inventory/inventory.module';
+import { StoresModule } from './features/stores/stores.module';
+import { AuthModule } from './common/auth/auth.module';
+import { HealthModule } from './features/health/health.module';
 
 @Module({
   imports: [
@@ -27,6 +30,9 @@ import { InventoryModule } from './features/inventory/inventory.module';
       useFactory: (config: ConfigService) => config.get('database') as object,
     }),
 
+    AuthModule,
+    HealthModule,
+    StoresModule,
     CategoriesModule,
     ProductsModule,
     PromotionsModule,

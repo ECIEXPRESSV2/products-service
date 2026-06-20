@@ -14,8 +14,10 @@ import {
 } from '@nestjs/common';
 import {
   ApiBadRequestResponse,
+  ApiBearerAuth,
   ApiConflictResponse,
   ApiCreatedResponse,
+  ApiForbiddenResponse,
   ApiNoContentResponse,
   ApiNotFoundResponse,
   ApiOkResponse,
@@ -23,16 +25,21 @@ import {
   ApiParam,
   ApiQuery,
   ApiTags,
+  ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
 import type { ICategoryService } from '../services/category.service.interface';
 import { CATEGORY_SERVICE } from '../services/category.service.interface';
 import { CreateCategoryDto } from '../dto/create-category.dto';
 import { UpdateCategoryDto } from '../dto/update-category.dto';
 import { Category } from '../entities/category.entity';
+import { RequireRoles } from '../../../common/decorators/require-roles.decorator';
 
 const STORE_ID_EXAMPLE = 'f47ac10b-58cc-4372-a567-0e02b2c3d479';
 
 @ApiTags('Categories')
+@ApiBearerAuth()
+@ApiUnauthorizedResponse({ description: 'Token ausente o inválido' })
+@ApiForbiddenResponse({ description: 'Rol sin permiso para esta operación' })
 @Controller('categories')
 export class CategoryController {
   constructor(
@@ -106,6 +113,7 @@ export class CategoryController {
   }
 
   @Post()
+  @RequireRoles('VENDOR', 'ADMIN')
   @ApiOperation({
     summary: 'Crear una nueva categoría',
     description:
@@ -120,6 +128,7 @@ export class CategoryController {
   }
 
   @Patch(':id')
+  @RequireRoles('VENDOR', 'ADMIN')
   @ApiOperation({
     summary: 'Actualizar una categoría existente',
     description:
@@ -144,6 +153,7 @@ export class CategoryController {
   }
 
   @Delete(':id')
+  @RequireRoles('VENDOR', 'ADMIN')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({
     summary: 'Eliminar una categoría (soft delete)',

@@ -14,20 +14,27 @@ import {
   Query,
 } from '@nestjs/common';
 import {
+  ApiBearerAuth,
+  ApiForbiddenResponse,
   ApiNoContentResponse,
   ApiNotFoundResponse,
   ApiOkResponse,
   ApiOperation,
   ApiQuery,
   ApiTags,
+  ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
 import type { IPromotionService } from '../services/promotion.service.interface';
 import { PROMOTION_SERVICE } from '../services/promotion.service.interface';
 import { CreatePromotionDto } from '../dto/create-promotion.dto';
 import { UpdatePromotionDto } from '../dto/update-promotion.dto';
 import { Promotion, PromotionScope } from '../entities/promotion.entity';
+import { RequireRoles } from '../../../common/decorators/require-roles.decorator';
 
 @ApiTags('Promotions')
+@ApiBearerAuth()
+@ApiUnauthorizedResponse({ description: 'Token ausente o inválido' })
+@ApiForbiddenResponse({ description: 'Rol sin permiso para esta operación' })
 @Controller('promotions')
 export class PromotionController {
   constructor(
@@ -99,6 +106,7 @@ export class PromotionController {
   // ── Mutations ────────────────────────────────────────────────────────────
 
   @Post()
+  @RequireRoles('VENDOR', 'ADMIN')
   @ApiOperation({ summary: 'Crear una nueva promoción' })
   @ApiOkResponse({ type: Promotion })
   create(@Body() dto: CreatePromotionDto): Promise<Promotion> {
@@ -106,6 +114,7 @@ export class PromotionController {
   }
 
   @Patch(':id')
+  @RequireRoles('VENDOR', 'ADMIN')
   @ApiOperation({ summary: 'Actualizar una promoción' })
   @ApiOkResponse({ type: Promotion })
   @ApiNotFoundResponse()
@@ -117,6 +126,7 @@ export class PromotionController {
   }
 
   @Patch(':id/activate')
+  @RequireRoles('VENDOR', 'ADMIN')
   @ApiOperation({ summary: 'Activar una promoción' })
   @ApiOkResponse({ type: Promotion })
   activate(@Param('id', ParseUUIDPipe) id: string): Promise<Promotion> {
@@ -124,6 +134,7 @@ export class PromotionController {
   }
 
   @Patch(':id/deactivate')
+  @RequireRoles('VENDOR', 'ADMIN')
   @ApiOperation({ summary: 'Desactivar una promoción' })
   @ApiOkResponse({ type: Promotion })
   deactivate(@Param('id', ParseUUIDPipe) id: string): Promise<Promotion> {
@@ -131,6 +142,7 @@ export class PromotionController {
   }
 
   @Delete(':id')
+  @RequireRoles('VENDOR', 'ADMIN')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Eliminar una promoción' })
   @ApiNoContentResponse()

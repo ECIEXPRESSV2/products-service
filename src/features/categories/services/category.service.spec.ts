@@ -6,6 +6,7 @@ import { CATEGORY_REPOSITORY } from '../repositories/category.repository.interfa
 import { ICategoryRepository } from '../repositories/category.repository.interface';
 import { CategoryPublisher } from '../../../messaging/publishers/category.publisher';
 import { AuditService } from '../../audit/audit.service';
+import { StoreValidator } from '../../stores/services/store-validator';
 import { Category } from '../entities/category.entity';
 import { CreateCategoryDto } from '../dto/create-category.dto';
 import { UpdateCategoryDto } from '../dto/update-category.dto';
@@ -63,6 +64,10 @@ describe('CategoryService', () => {
       findAll: jest.fn(),
     } as unknown as jest.Mocked<AuditService>;
 
+    const storeValidatorMock = {
+      assertActive: jest.fn().mockResolvedValue(undefined),
+    } as unknown as jest.Mocked<StoreValidator>;
+
     const loggerMock = {
       log: jest.fn(),
       warn: jest.fn(),
@@ -76,6 +81,7 @@ describe('CategoryService', () => {
         { provide: CATEGORY_REPOSITORY, useValue: repoMock },
         { provide: CategoryPublisher, useValue: publisherMock },
         { provide: AuditService, useValue: auditMock },
+        { provide: StoreValidator, useValue: storeValidatorMock },
         { provide: WINSTON_MODULE_NEST_PROVIDER, useValue: loggerMock },
       ],
     }).compile();
