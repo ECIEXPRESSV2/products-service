@@ -6,7 +6,6 @@ import { PRODUCT_REPOSITORY } from './repositories/product.repository.interface'
 import { ProductService } from './services/product.service';
 import { PRODUCT_SERVICE } from './services/product.service.interface';
 import { ProductController } from './controllers/product.controller';
-import { StockConsumer } from './consumers/stock.consumer';
 import { RabbitMQModule } from '../../messaging/rabbitmq.module';
 import { AuditModule } from '../audit/audit.module';
 import { CategoriesModule } from '../categories/categories.module';
@@ -25,7 +24,7 @@ import { StoresModule } from '../stores/stores.module';
     InventoryModule,
     StoresModule,
   ],
-  controllers: [ProductController, StockConsumer],
+  controllers: [ProductController],
   providers: [
     { provide: PRODUCT_REPOSITORY, useClass: ProductRepository },
     { provide: PRODUCT_SERVICE, useClass: ProductService },
