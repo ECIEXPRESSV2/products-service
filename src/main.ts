@@ -1,6 +1,10 @@
 import { NestFactory } from '@nestjs/core';
-import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import { ValidationPipe } from '@nestjs/common';
+import { MicroserviceOptions, Transport } from '@nestjs/microservices';
+import { ConfigService } from '@nestjs/config';
+import { WINSTON_MODULE_NEST_PROVIDER } from 'nest-winston';
 import { AppModule } from './app.module';
+import { setupSwagger } from './config/swagger.config';
 import { execSync, exec } from 'child_process';
 import * as fs from 'fs';
 import * as os from 'os';
@@ -43,16 +47,12 @@ function openSwaggerIfBrowserOpen(url: string): void {
       const { timestamp } = JSON.parse(fs.readFileSync(LOCK_FILE, 'utf-8')) as {
         timestamp: number;
       };
-      if (Date.now() - timestamp < HOT_RELOAD_WINDOW_MS) {
-        return;
-      }
+      if (Date.now() - timestamp < HOT_RELOAD_WINDOW_MS) return;
     } catch {
-      // lock file corrupted or old format — proceed
+      // lock file corrupted — proceed
     }
   }
-
   if (!isBrowserRunning()) return;
-
   fs.writeFileSync(LOCK_FILE, JSON.stringify({ timestamp: Date.now() }), 'utf-8');
   openBrowser(url);
 }
@@ -76,16 +76,33 @@ process.on('SIGINT', () => {
 });
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create(AppModule, { bufferLogs: true });
 
-  const config = new DocumentBuilder()
-    .setTitle('Products Service')
-    .setDescription('Products Service API documentation')
-    .setVersion('1.0')
-    .build();
+  // Use Winston as the NestJS logger
+  app.useLogger(app.get(WINSTON_MODULE_NEST_PROVIDER));
 
-  const document = SwaggerModule.createDocument(app, config);
-  SwaggerModule.setup('api', app, document);
+  app.useGlobalPipes(
+    new ValidationPipe({
+      whitelist: true,
+      forbidNonWhitelisted: true,
+      transform: true,
+    }),
+  );
+
+  // Consumer de eventos del Order Service (order.placed, order.confirmed, order.cancelled)
+  const configService = app.get(ConfigService);
+  app.connectMicroservice<MicroserviceOptions>({
+    transport: Transport.RMQ,
+    options: {
+      urls: [configService.get<string>('RABBITMQ_URL', 'amqp://guest:guest@localhost:5672')],
+      queue: 'order_events',
+      queueOptions: { durable: true },
+      noAck: false,
+    },
+  });
+  await app.startAllMicroservices();
+
+  setupSwagger(app);
 
   const port = process.env.PORT ?? 3000;
   await app.listen(port);
