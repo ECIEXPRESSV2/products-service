@@ -1,7 +1,5 @@
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
-import { MicroserviceOptions, Transport } from '@nestjs/microservices';
-import { ConfigService } from '@nestjs/config';
 import { WINSTON_MODULE_NEST_PROVIDER } from 'nest-winston';
 import { AppModule } from './app.module';
 import { setupSwagger } from './config/swagger.config';
@@ -81,6 +79,9 @@ async function bootstrap() {
   // Use Winston as the NestJS logger
   app.useLogger(app.get(WINSTON_MODULE_NEST_PROVIDER));
 
+  // El frontend llama al catálogo directamente desde el navegador.
+  app.enableCors({ origin: true, credentials: true });
+
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
@@ -89,22 +90,13 @@ async function bootstrap() {
     }),
   );
 
-  // Consumer de eventos del Order Service (order.placed, order.confirmed, order.cancelled)
-  const configService = app.get(ConfigService);
-  app.connectMicroservice<MicroserviceOptions>({
-    transport: Transport.RMQ,
-    options: {
-      urls: [configService.get<string>('RABBITMQ_URL', 'amqp://guest:guest@localhost:5672')],
-      queue: 'order_events',
-      queueOptions: { durable: true },
-      noAck: false,
-    },
-  });
-  await app.startAllMicroservices();
+  // Los eventos de orders (carrito, checkout, devoluciones) se consumen ahora desde el
+  // exchange topic compartido `eciexpress_events` vía @golevelup (CartModule /
+  // SharedBusModule), no por el transporte NestJS-RMQ de cola.
 
   setupSwagger(app);
 
-  const port = process.env.PORT ?? 3000;
+  const port = process.env.PORT ?? 3002;
   await app.listen(port);
 
   openSwaggerIfBrowserOpen(`http://localhost:${port}/api`);

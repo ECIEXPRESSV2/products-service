@@ -25,6 +25,7 @@
     "migration:create": "typeorm-ts-node-commonjs migration:create"
   },
   "dependencies": {
+    "@golevelup/nestjs-rabbitmq": "^9.0.2",
     "@nestjs/axios": "^4.0.0",
     "@nestjs/common": "^11.0.1",
     "@nestjs/config": "^4.0.4",
