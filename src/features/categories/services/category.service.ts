@@ -11,12 +11,16 @@ import { CategoryPublisher } from '../../../messaging/publishers/category.publis
 import { AuditService } from '../../audit/audit.service';
 import { AuditAction } from '../../audit/entities/audit-log.entity';
 import { StoreValidator } from '../../stores/services/store-validator';
+import type { IProductRepository } from '../../products/repositories/product.repository.interface';
+import { PRODUCT_REPOSITORY } from '../../products/repositories/product.repository.interface';
 
 @Injectable()
 export class CategoryService implements ICategoryService {
   constructor(
     @Inject(CATEGORY_REPOSITORY)
     private readonly categoryRepository: ICategoryRepository,
+    @Inject(PRODUCT_REPOSITORY)
+    private readonly productRepository: IProductRepository,
     private readonly publisher: CategoryPublisher,
     private readonly auditService: AuditService,
     private readonly storeValidator: StoreValidator,
@@ -49,7 +53,7 @@ export class CategoryService implements ICategoryService {
     );
   }
 
-  async create(dto: CreateCategoryDto): Promise<Category> {
+  async create(dto: CreateCategoryDto, performedBy?: string): Promise<Category> {
     this.logger.log(
       `Creating category slug="${dto.slug}" store=${dto.storeId}`,
       CategoryService.name,
@@ -67,6 +71,7 @@ export class CategoryService implements ICategoryService {
       entityId: category.id,
       action: AuditAction.CREATE,
       afterData: this.toAuditData(category),
+      performedBy,
     });
 
     this.publisher.categoryCreated({
@@ -80,7 +85,7 @@ export class CategoryService implements ICategoryService {
     return category;
   }
 
-  async update(id: string, dto: UpdateCategoryDto): Promise<Category> {
+  async update(id: string, dto: UpdateCategoryDto, performedBy?: string): Promise<Category> {
     this.logger.log(`Updating category id=${id}`, CategoryService.name);
     const before = await this.findById(id);
 
@@ -104,13 +109,14 @@ export class CategoryService implements ICategoryService {
       action: AuditAction.UPDATE,
       beforeData: this.toAuditData(before),
       afterData: this.toAuditData(updated),
+      performedBy,
     });
 
     this.publisher.categoryUpdated({ id, storeId: updated.storeId, ...dto });
     return updated;
   }
 
-  async remove(id: string): Promise<void> {
+  async remove(id: string, performedBy?: string): Promise<void> {
     this.logger.log(`Removing category id=${id}`, CategoryService.name);
     const category = await this.findById(id);
 
@@ -118,6 +124,13 @@ export class CategoryService implements ICategoryService {
     if (children.length > 0) {
       throw new ConflictException(
         `La categoría tiene ${children.length} subcategoría(s) activa(s). Elimínalas primero.`,
+      );
+    }
+
+    const activeProductCount = await this.productRepository.countActiveByCategory(id);
+    if (activeProductCount > 0) {
+      throw new ConflictException(
+        `La categoría tiene ${activeProductCount} producto(s) activo(s). Elimínalos o muévelos primero.`,
       );
     }
 
@@ -130,6 +143,7 @@ export class CategoryService implements ICategoryService {
       entityId: id,
       action: AuditAction.DELETE,
       beforeData: this.toAuditData(category),
+      performedBy,
     });
 
     this.publisher.categoryDeleted({ id, storeId: category.storeId });

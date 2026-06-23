@@ -8,6 +8,13 @@ import { UpdateProductDto } from '../dto/update-product.dto';
 import { PaginatedProductResult } from '../dto/paginated-result.dto';
 
 /**
+ * Nombre de la tabla de la réplica local de Store (`features/stores/entities/store.entity.ts`).
+ * Se referencia por nombre de tabla (no se importa la entidad) para evitar un
+ * ciclo de módulos entre ProductsModule y StoresModule; el join es puramente SQL.
+ */
+const STORES_TABLE = 'stores';
+
+/**
  * SRP: única responsabilidad — acceso a datos de productos.
  * OCP: cambiar de ORM solo requiere reemplazar esta clase; servicio y controlador no se tocan.
  */
@@ -18,12 +25,29 @@ export class ProductRepository implements IProductRepository {
     private readonly orm: Repository<Product>,
   ) {}
 
+  /**
+   * Query builder base de lectura: inner join contra la réplica local de
+   * Store para excluir productos de tiendas inactivas (CU-03). Equivalente
+   * de lectura a `StoreValidator.assertActive` en las rutas de escritura.
+   */
+  private baseActiveStoreQuery(storeId: string, includeInactive: boolean) {
+    const qb = this.orm
+      .createQueryBuilder('product')
+      .leftJoinAndSelect('product.category', 'category')
+      .innerJoin(STORES_TABLE, 'store', 'store.id = product.store_id')
+      .where('product.store_id = :storeId', { storeId })
+      .andWhere('store.is_active = true');
+    if (!includeInactive) {
+      qb.andWhere('product.is_active = true');
+    }
+    return qb;
+  }
+
   findAll(storeId: string, includeInactive = false): Promise<Product[]> {
-    return this.orm.find({
-      where: { storeId, ...(includeInactive ? {} : { isActive: true }) },
-      relations: { category: true },
-      order: { sortOrder: 'ASC', name: 'ASC' },
-    });
+    return this.baseActiveStoreQuery(storeId, includeInactive)
+      .orderBy('product.sort_order', 'ASC')
+      .addOrderBy('product.name', 'ASC')
+      .getMany();
   }
 
   async findAllPaginated(
@@ -32,22 +56,21 @@ export class ProductRepository implements IProductRepository {
     limit: number,
     includeInactive = false,
   ): Promise<PaginatedProductResult> {
-    const [data, total] = await this.orm.findAndCount({
-      where: { storeId, ...(includeInactive ? {} : { isActive: true }) },
-      relations: { category: true },
-      order: { sortOrder: 'ASC', name: 'ASC' },
-      skip: (page - 1) * limit,
-      take: limit,
-    });
+    const [data, total] = await this.baseActiveStoreQuery(storeId, includeInactive)
+      .orderBy('product.sort_order', 'ASC')
+      .addOrderBy('product.name', 'ASC')
+      .skip((page - 1) * limit)
+      .take(limit)
+      .getManyAndCount();
     return { data, total, page, limit, totalPages: Math.ceil(total / limit) };
   }
 
   findByCategory(storeId: string, categoryId: string, includeInactive = false): Promise<Product[]> {
-    return this.orm.find({
-      where: { storeId, categoryId, ...(includeInactive ? {} : { isActive: true }) },
-      relations: { category: true },
-      order: { sortOrder: 'ASC', name: 'ASC' },
-    });
+    return this.baseActiveStoreQuery(storeId, includeInactive)
+      .andWhere('product.category_id = :categoryId', { categoryId })
+      .orderBy('product.sort_order', 'ASC')
+      .addOrderBy('product.name', 'ASC')
+      .getMany();
   }
 
   async findByCategoryPaginated(
@@ -57,22 +80,18 @@ export class ProductRepository implements IProductRepository {
     limit: number,
     includeInactive = false,
   ): Promise<PaginatedProductResult> {
-    const [data, total] = await this.orm.findAndCount({
-      where: { storeId, categoryId, ...(includeInactive ? {} : { isActive: true }) },
-      relations: { category: true },
-      order: { sortOrder: 'ASC', name: 'ASC' },
-      skip: (page - 1) * limit,
-      take: limit,
-    });
+    const [data, total] = await this.baseActiveStoreQuery(storeId, includeInactive)
+      .andWhere('product.category_id = :categoryId', { categoryId })
+      .orderBy('product.sort_order', 'ASC')
+      .addOrderBy('product.name', 'ASC')
+      .skip((page - 1) * limit)
+      .take(limit)
+      .getManyAndCount();
     return { data, total, page, limit, totalPages: Math.ceil(total / limit) };
   }
 
   findLowStock(storeId: string): Promise<Product[]> {
-    return this.orm
-      .createQueryBuilder('product')
-      .leftJoinAndSelect('product.category', 'category')
-      .where('product.store_id = :storeId', { storeId })
-      .andWhere('product.is_active = true')
+    return this.baseActiveStoreQuery(storeId, false)
       .andWhere('product.min_stock > 0')
       .andWhere('(product.stock - product.reserved_stock) <= product.min_stock')
       .orderBy('(product.stock - product.reserved_stock)', 'ASC')
@@ -80,11 +99,7 @@ export class ProductRepository implements IProductRepository {
   }
 
   search(storeId: string, query: string): Promise<Product[]> {
-    return this.orm
-      .createQueryBuilder('product')
-      .leftJoinAndSelect('product.category', 'category')
-      .where('product.store_id = :storeId', { storeId })
-      .andWhere('product.is_active = true')
+    return this.baseActiveStoreQuery(storeId, false)
       .andWhere('product.name ILIKE :query', { query: `%${query}%` })
       .orderBy('product.sort_order', 'ASC')
       .addOrderBy('product.name', 'ASC')
@@ -175,5 +190,9 @@ export class ProductRepository implements IProductRepository {
 
   existsById(id: string): Promise<boolean> {
     return this.orm.existsBy({ id });
+  }
+
+  countActiveByCategory(categoryId: string): Promise<number> {
+    return this.orm.count({ where: { categoryId, isActive: true } });
   }
 }

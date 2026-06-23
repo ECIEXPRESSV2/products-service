@@ -21,7 +21,7 @@ export default registerAs('database', (): TypeOrmModuleOptions => {
     return {
       ...common,
       url: process.env.DATABASE_URL,
-      ssl: { rejectUnauthorized: false }, // NeonDB requiere SSL (sslmode=require)
+      ssl: { rejectUnauthorized: true }, // NeonDB requiere SSL (sslmode=require)
     };
   }
 

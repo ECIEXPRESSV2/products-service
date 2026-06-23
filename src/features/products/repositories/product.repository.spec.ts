@@ -23,6 +23,7 @@ function makeProduct(overrides: Partial<Product> = {}): Product {
     sku: null,
     imageUrl: null,
     stock: 20,
+    reservedStock: 0,
     minStock: 5,
     isActive: true,
     sortOrder: 0,
@@ -32,14 +33,19 @@ function makeProduct(overrides: Partial<Product> = {}): Product {
   };
 }
 
-function makeQueryBuilderMock(getMany: jest.Mock = jest.fn()) {
+function makeQueryBuilderMock(overrides: Partial<Record<string, jest.Mock>> = {}) {
   const qb = {
     leftJoinAndSelect: jest.fn().mockReturnThis(),
+    innerJoin: jest.fn().mockReturnThis(),
     where: jest.fn().mockReturnThis(),
     andWhere: jest.fn().mockReturnThis(),
     orderBy: jest.fn().mockReturnThis(),
     addOrderBy: jest.fn().mockReturnThis(),
-    getMany,
+    skip: jest.fn().mockReturnThis(),
+    take: jest.fn().mockReturnThis(),
+    getMany: jest.fn().mockResolvedValue([]),
+    getManyAndCount: jest.fn().mockResolvedValue([[], 0]),
+    ...overrides,
   } as unknown as jest.Mocked<SelectQueryBuilder<Product>>;
   return qb;
 }
@@ -58,6 +64,7 @@ describe('ProductRepository', () => {
       merge: jest.fn(),
       update: jest.fn(),
       existsBy: jest.fn(),
+      count: jest.fn(),
       createQueryBuilder: jest.fn(),
     } as unknown as jest.Mocked<Repository<Product>>;
 
@@ -73,30 +80,37 @@ describe('ProductRepository', () => {
   });
 
   // ── findAll ──────────────────────────────────────────────────────────────
+  // Nota: estos métodos de lectura ahora usan un query builder con inner join
+  // contra la réplica local de `stores` para excluir productos de tiendas
+  // inactivas (CU-03), en vez de `orm.find`/`orm.findAndCount`.
 
   describe('findAll', () => {
-    it('finds active products for store ordered by sortOrder and name', async () => {
+    it('finds active products for an active store, ordered by sortOrder and name', async () => {
       const products = [makeProduct()];
-      orm.find.mockResolvedValue(products);
+      const qb = makeQueryBuilderMock({ getMany: jest.fn().mockResolvedValue(products) });
+      orm.createQueryBuilder.mockReturnValue(qb as unknown as SelectQueryBuilder<Product>);
 
       const result = await repository.findAll(STORE_ID);
 
-      expect(orm.find).toHaveBeenCalledWith({
-        where: { storeId: STORE_ID, isActive: true },
-        relations: { category: true },
-        order: { sortOrder: 'ASC', name: 'ASC' },
-      });
+      expect(orm.createQueryBuilder).toHaveBeenCalledWith('product');
+      expect(qb.innerJoin).toHaveBeenCalledWith('stores', 'store', 'store.id = product.store_id');
+      expect(qb.where).toHaveBeenCalledWith('product.store_id = :storeId', { storeId: STORE_ID });
+      expect(qb.andWhere).toHaveBeenCalledWith('store.is_active = true');
+      expect(qb.andWhere).toHaveBeenCalledWith('product.is_active = true');
+      expect(qb.orderBy).toHaveBeenCalledWith('product.sort_order', 'ASC');
+      expect(qb.addOrderBy).toHaveBeenCalledWith('product.name', 'ASC');
       expect(result).toBe(products);
     });
 
-    it('includes inactive products when includeInactive is true', async () => {
-      orm.find.mockResolvedValue([]);
+    it('does not filter by product.is_active when includeInactive is true', async () => {
+      const qb = makeQueryBuilderMock();
+      orm.createQueryBuilder.mockReturnValue(qb as unknown as SelectQueryBuilder<Product>);
 
       await repository.findAll(STORE_ID, true);
 
-      expect(orm.find).toHaveBeenCalledWith(
-        expect.objectContaining({ where: { storeId: STORE_ID } }),
-      );
+      expect(qb.andWhere).not.toHaveBeenCalledWith('product.is_active = true');
+      // La tienda activa siempre se exige, incluso con includeInactive.
+      expect(qb.andWhere).toHaveBeenCalledWith('store.is_active = true');
     });
   });
 
@@ -105,28 +119,29 @@ describe('ProductRepository', () => {
   describe('findAllPaginated', () => {
     it('returns paginated result with correct metadata', async () => {
       const products = [makeProduct()];
-      orm.findAndCount.mockResolvedValue([products, 1]);
+      const qb = makeQueryBuilderMock({ getManyAndCount: jest.fn().mockResolvedValue([products, 1]) });
+      orm.createQueryBuilder.mockReturnValue(qb as unknown as SelectQueryBuilder<Product>);
 
       const result = await repository.findAllPaginated(STORE_ID, 1, 20);
 
-      expect(orm.findAndCount).toHaveBeenCalledWith(
-        expect.objectContaining({ skip: 0, take: 20 }),
-      );
+      expect(qb.skip).toHaveBeenCalledWith(0);
+      expect(qb.take).toHaveBeenCalledWith(20);
       expect(result).toEqual({ data: products, total: 1, page: 1, limit: 20, totalPages: 1 });
     });
 
     it('calculates skip correctly for page 2', async () => {
-      orm.findAndCount.mockResolvedValue([[], 50]);
+      const qb = makeQueryBuilderMock({ getManyAndCount: jest.fn().mockResolvedValue([[], 50]) });
+      orm.createQueryBuilder.mockReturnValue(qb as unknown as SelectQueryBuilder<Product>);
 
       await repository.findAllPaginated(STORE_ID, 2, 10);
 
-      expect(orm.findAndCount).toHaveBeenCalledWith(
-        expect.objectContaining({ skip: 10, take: 10 }),
-      );
+      expect(qb.skip).toHaveBeenCalledWith(10);
+      expect(qb.take).toHaveBeenCalledWith(10);
     });
 
     it('calculates totalPages correctly with partial last page', async () => {
-      orm.findAndCount.mockResolvedValue([[], 25]);
+      const qb = makeQueryBuilderMock({ getManyAndCount: jest.fn().mockResolvedValue([[], 25]) });
+      orm.createQueryBuilder.mockReturnValue(qb as unknown as SelectQueryBuilder<Product>);
 
       const result = await repository.findAllPaginated(STORE_ID, 1, 10);
 
@@ -137,17 +152,16 @@ describe('ProductRepository', () => {
   // ── findByCategory ────────────────────────────────────────────────────────
 
   describe('findByCategory', () => {
-    it('filters by storeId and categoryId', async () => {
+    it('filters by storeId, categoryId, and active store', async () => {
       const products = [makeProduct()];
-      orm.find.mockResolvedValue(products);
+      const qb = makeQueryBuilderMock({ getMany: jest.fn().mockResolvedValue(products) });
+      orm.createQueryBuilder.mockReturnValue(qb as unknown as SelectQueryBuilder<Product>);
 
       const result = await repository.findByCategory(STORE_ID, CATEGORY_ID);
 
-      expect(orm.find).toHaveBeenCalledWith({
-        where: { storeId: STORE_ID, categoryId: CATEGORY_ID, isActive: true },
-        relations: { category: true },
-        order: { sortOrder: 'ASC', name: 'ASC' },
-      });
+      expect(qb.where).toHaveBeenCalledWith('product.store_id = :storeId', { storeId: STORE_ID });
+      expect(qb.andWhere).toHaveBeenCalledWith('store.is_active = true');
+      expect(qb.andWhere).toHaveBeenCalledWith('product.category_id = :categoryId', { categoryId: CATEGORY_ID });
       expect(result).toBe(products);
     });
   });
@@ -157,17 +171,14 @@ describe('ProductRepository', () => {
   describe('findByCategoryPaginated', () => {
     it('returns paginated result filtered by category', async () => {
       const products = [makeProduct()];
-      orm.findAndCount.mockResolvedValue([products, 1]);
+      const qb = makeQueryBuilderMock({ getManyAndCount: jest.fn().mockResolvedValue([products, 1]) });
+      orm.createQueryBuilder.mockReturnValue(qb as unknown as SelectQueryBuilder<Product>);
 
       const result = await repository.findByCategoryPaginated(STORE_ID, CATEGORY_ID, 1, 20);
 
-      expect(orm.findAndCount).toHaveBeenCalledWith(
-        expect.objectContaining({
-          where: { storeId: STORE_ID, categoryId: CATEGORY_ID, isActive: true },
-          skip: 0,
-          take: 20,
-        }),
-      );
+      expect(qb.andWhere).toHaveBeenCalledWith('product.category_id = :categoryId', { categoryId: CATEGORY_ID });
+      expect(qb.skip).toHaveBeenCalledWith(0);
+      expect(qb.take).toHaveBeenCalledWith(20);
       expect(result.data).toBe(products);
     });
   });
@@ -175,16 +186,16 @@ describe('ProductRepository', () => {
   // ── findLowStock ─────────────────────────────────────────────────────────
 
   describe('findLowStock', () => {
-    it('queries products where stock <= min_stock ordered by stock ASC', async () => {
+    it('queries products where stock <= min_stock ordered by stock ASC, only from active stores', async () => {
       const lowProducts = [makeProduct({ stock: 2 })];
-      const getManyMock = jest.fn().mockResolvedValue(lowProducts);
-      const qb = makeQueryBuilderMock(getManyMock);
+      const qb = makeQueryBuilderMock({ getMany: jest.fn().mockResolvedValue(lowProducts) });
       orm.createQueryBuilder.mockReturnValue(qb as unknown as SelectQueryBuilder<Product>);
 
       const result = await repository.findLowStock(STORE_ID);
 
       expect(orm.createQueryBuilder).toHaveBeenCalledWith('product');
       expect(qb.where).toHaveBeenCalledWith('product.store_id = :storeId', { storeId: STORE_ID });
+      expect(qb.andWhere).toHaveBeenCalledWith('store.is_active = true');
       expect(qb.andWhere).toHaveBeenCalledWith('product.is_active = true');
       expect(qb.andWhere).toHaveBeenCalledWith('product.min_stock > 0');
       expect(qb.andWhere).toHaveBeenCalledWith('(product.stock - product.reserved_stock) <= product.min_stock');
@@ -196,15 +207,15 @@ describe('ProductRepository', () => {
   // ── search ───────────────────────────────────────────────────────────────
 
   describe('search', () => {
-    it('searches active products by name using ILIKE', async () => {
+    it('searches active products from active stores by name using ILIKE', async () => {
       const products = [makeProduct()];
-      const getManyMock = jest.fn().mockResolvedValue(products);
-      const qb = makeQueryBuilderMock(getManyMock);
+      const qb = makeQueryBuilderMock({ getMany: jest.fn().mockResolvedValue(products) });
       orm.createQueryBuilder.mockReturnValue(qb as unknown as SelectQueryBuilder<Product>);
 
       const result = await repository.search(STORE_ID, 'café');
 
       expect(qb.where).toHaveBeenCalledWith('product.store_id = :storeId', { storeId: STORE_ID });
+      expect(qb.andWhere).toHaveBeenCalledWith('store.is_active = true');
       expect(qb.andWhere).toHaveBeenCalledWith('product.is_active = true');
       expect(qb.andWhere).toHaveBeenCalledWith('product.name ILIKE :query', { query: '%café%' });
       expect(result).toBe(products);
@@ -438,6 +449,19 @@ describe('ProductRepository', () => {
       orm.existsBy.mockResolvedValue(false);
 
       expect(await repository.existsById('non-existent')).toBe(false);
+    });
+  });
+
+  // ── countActiveByCategory ────────────────────────────────────────────────
+
+  describe('countActiveByCategory', () => {
+    it('counts active products in a category', async () => {
+      orm.count.mockResolvedValue(3);
+
+      const result = await repository.countActiveByCategory(CATEGORY_ID);
+
+      expect(orm.count).toHaveBeenCalledWith({ where: { categoryId: CATEGORY_ID, isActive: true } });
+      expect(result).toBe(3);
     });
   });
 });

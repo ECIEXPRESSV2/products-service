@@ -3,6 +3,8 @@ import { PRODUCT_SERVICE } from '../../products/services/product.service.interfa
 import type { IProductService } from '../../products/services/product.service.interface';
 import { CART_REPOSITORY } from '../repositories/cart.repository';
 import type { ICartRepository } from '../repositories/cart.repository';
+import { SharedEventPublisher } from '../../../messaging/shared-bus/shared-event-publisher.service';
+import { PUBLISHED_PRODUCT_EVENTS } from '../../../messaging/shared-bus/contracts';
 
 /**
  * Reserva de inventario cableada al flujo nuevo. orders no envía los ítems en los
@@ -18,12 +20,17 @@ export class StockReservationService {
   constructor(
     @Inject(CART_REPOSITORY) private readonly carts: ICartRepository,
     @Inject(PRODUCT_SERVICE) private readonly products: IProductService,
+    private readonly sharedEventPublisher: SharedEventPublisher,
   ) {}
 
   /** Checkout (order.order.created): reserva stock de cada línea del carrito. */
   async reserveForOrder(orderId: string): Promise<void> {
-    await this.forEachLine(orderId, 'reservar', (productId, quantity) =>
-      this.products.reserveStock(productId, quantity, orderId),
+    await this.forEachLine(
+      orderId,
+      'reservar',
+      (productId, quantity) => this.products.reserveStock(productId, quantity, orderId),
+      (productId, quantity, reason) =>
+        this.publishReservationRejected(orderId, productId, quantity, reason),
     );
   }
 
@@ -45,6 +52,7 @@ export class StockReservationService {
     orderId: string,
     action: string,
     fn: (productId: string, quantity: number) => Promise<void>,
+    onRejected?: (productId: string, quantity: number, reason: string) => Promise<void>,
   ): Promise<void> {
     const cart = await this.carts.findById(orderId);
     if (!cart || cart.lines.length === 0) {
@@ -55,10 +63,34 @@ export class StockReservationService {
       try {
         await fn(line.productId, line.quantity);
       } catch (error) {
+        const reason = (error as Error).message;
         this.logger.error(
-          `No se pudo ${action} stock producto=${line.productId} order=${orderId}: ${(error as Error).message}`,
+          `No se pudo ${action} stock producto=${line.productId} order=${orderId}: ${reason}`,
         );
+        if (onRejected) {
+          await onRejected(line.productId, line.quantity, reason);
+        }
       }
     }
+  }
+
+  /** CU-05: publica el rechazo de una línea para que orders pueda reaccionar (cancelar/notificar). */
+  private async publishReservationRejected(
+    orderId: string,
+    productId: string,
+    quantity: number,
+    reason: string,
+  ): Promise<void> {
+    const product = await this.products.findById(productId).catch(() => null);
+    const storeId = product?.storeId ?? '';
+    const available = product ? product.stock - product.reservedStock : 0;
+    await this.sharedEventPublisher.publish(PUBLISHED_PRODUCT_EVENTS.RESERVATION_REJECTED, {
+      orderId,
+      productId,
+      storeId,
+      requestedQuantity: quantity,
+      availableQuantity: available,
+      reason,
+    });
   }
 }

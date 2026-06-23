@@ -94,7 +94,7 @@ describe('CategoryController', () => {
 
       const result = await controller.create(dto);
 
-      expect(service.create).toHaveBeenCalledWith(dto);
+      expect(service.create).toHaveBeenCalledWith(dto, undefined);
       expect(result).toBe(created);
     });
   });
@@ -107,7 +107,7 @@ describe('CategoryController', () => {
 
       const result = await controller.update(CAT_ID, dto);
 
-      expect(service.update).toHaveBeenCalledWith(CAT_ID, dto);
+      expect(service.update).toHaveBeenCalledWith(CAT_ID, dto, undefined);
       expect(result).toBe(updated);
     });
   });
@@ -118,7 +118,7 @@ describe('CategoryController', () => {
 
       await controller.remove(CAT_ID);
 
-      expect(service.remove).toHaveBeenCalledWith(CAT_ID);
+      expect(service.remove).toHaveBeenCalledWith(CAT_ID, undefined);
     });
   });
 });

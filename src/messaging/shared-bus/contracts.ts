@@ -31,6 +31,10 @@ export const PUBLISHED_PRODUCT_EVENTS = {
   CART_PRICED: 'products.cart.priced',
   /** Devolución cotizada: monto a reembolsar calculado desde la proyección. */
   RETURN_PRICED: 'products.return.priced',
+  /** Stock disponible de un producto cayó a `minStock` o por debajo (CU-04). */
+  LOW_STOCK: 'inventory.low_stock',
+  /** Una reserva de stock para una línea de orden fue rechazada por falta de inventario (CU-05). */
+  RESERVATION_REJECTED: 'inventory.reservation_rejected',
 } as const;
 
 // ─── Payloads consumidos (campos que usamos del envelope de orders) ─────────
@@ -99,4 +103,22 @@ export interface ReturnPricedPayload {
   full: boolean;
   refundAmount: number;
   lines: ReturnPricedLine[];
+}
+
+export interface LowStockPayload {
+  productId: string;
+  storeId: string;
+  name: string;
+  stock: number;
+  reservedStock: number;
+  minStock: number;
+}
+
+export interface ReservationRejectedPayload {
+  orderId: string;
+  productId: string;
+  storeId: string;
+  requestedQuantity: number;
+  availableQuantity: number;
+  reason: string;
 }

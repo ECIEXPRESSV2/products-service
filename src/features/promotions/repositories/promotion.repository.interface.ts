@@ -12,6 +12,14 @@ export interface IPromotionRepository {
     onlyActive?: boolean,
   ): Promise<Promotion[]>;
   findById(id: string): Promise<Promotion | null>;
+  findOverlapping(
+    storeId: string,
+    scope: PromotionScope,
+    targetId: string,
+    startsAt: Date,
+    endsAt: Date | null,
+    excludeId?: string,
+  ): Promise<Promotion[]>;
   create(dto: CreatePromotionDto): Promise<Promotion>;
   update(id: string, dto: UpdatePromotionDto): Promise<Promotion | null>;
   setActive(id: string, isActive: boolean): Promise<Promotion | null>;

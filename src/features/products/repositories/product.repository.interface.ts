@@ -27,6 +27,7 @@ export interface IProductRepository {
   softDelete(id: string): Promise<boolean>;
   setActive(id: string, isActive: boolean): Promise<Product | null>;
   existsById(id: string): Promise<boolean>;
+  countActiveByCategory(categoryId: string): Promise<number>;
 }
 
 export const PRODUCT_REPOSITORY = Symbol('IProductRepository');
