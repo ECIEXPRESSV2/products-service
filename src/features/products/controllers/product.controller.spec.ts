@@ -198,7 +198,7 @@ describe('ProductController', () => {
 
       const result = await controller.create(dto);
 
-      expect(service.create).toHaveBeenCalledWith(dto);
+      expect(service.create).toHaveBeenCalledWith(dto, undefined);
       expect(result).toBe(created);
     });
   });
@@ -246,7 +246,7 @@ describe('ProductController', () => {
 
       await controller.remove(PRODUCT_ID);
 
-      expect(service.remove).toHaveBeenCalledWith(PRODUCT_ID);
+      expect(service.remove).toHaveBeenCalledWith(PRODUCT_ID, undefined);
     });
   });
 });

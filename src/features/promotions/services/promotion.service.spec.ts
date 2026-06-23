@@ -50,6 +50,7 @@ describe('PromotionService', () => {
       setActive: jest.fn(),
       remove: jest.fn(),
       existsById: jest.fn(),
+      findOverlapping: jest.fn().mockResolvedValue([]),
     };
 
     const publisherMock = {

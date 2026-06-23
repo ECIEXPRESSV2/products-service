@@ -14,11 +14,11 @@ export interface IPromotionService {
   findActive(storeId: string): Promise<Promotion[]>;
   findByTarget(storeId: string, scope: PromotionScope, targetId: string): Promise<Promotion[]>;
   findById(id: string): Promise<Promotion>;
-  create(dto: CreatePromotionDto): Promise<Promotion>;
-  update(id: string, dto: UpdatePromotionDto): Promise<Promotion>;
+  create(dto: CreatePromotionDto, performedBy?: string): Promise<Promotion>;
+  update(id: string, dto: UpdatePromotionDto, performedBy?: string): Promise<Promotion>;
   activate(id: string): Promise<Promotion>;
   deactivate(id: string): Promise<Promotion>;
-  remove(id: string): Promise<void>;
+  remove(id: string, performedBy?: string): Promise<void>;
   calculateEffectivePrice(
     storeId: string,
     productId: string,

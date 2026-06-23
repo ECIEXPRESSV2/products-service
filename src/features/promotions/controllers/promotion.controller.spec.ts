@@ -155,7 +155,7 @@ describe('PromotionController', () => {
 
       const result = await controller.create(dto);
 
-      expect(service.create).toHaveBeenCalledWith(dto);
+      expect(service.create).toHaveBeenCalledWith(dto, undefined);
       expect(result).toBe(created);
     });
   });
@@ -167,7 +167,7 @@ describe('PromotionController', () => {
 
       const result = await controller.update(PROMO_ID, { name: 'Promo actualizada' });
 
-      expect(service.update).toHaveBeenCalledWith(PROMO_ID, { name: 'Promo actualizada' });
+      expect(service.update).toHaveBeenCalledWith(PROMO_ID, { name: 'Promo actualizada' }, undefined);
       expect(result).toBe(updated);
     });
   });
@@ -202,7 +202,7 @@ describe('PromotionController', () => {
 
       await controller.remove(PROMO_ID);
 
-      expect(service.remove).toHaveBeenCalledWith(PROMO_ID);
+      expect(service.remove).toHaveBeenCalledWith(PROMO_ID, undefined);
     });
   });
 });

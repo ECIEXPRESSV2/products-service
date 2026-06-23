@@ -56,6 +56,37 @@ export class PromotionRepository implements IPromotionRepository {
     return this.orm.findOne({ where: { id } });
   }
 
+  /**
+   * CU-06: promociones activas para el mismo target (producto/categoría) cuyo
+   * rango de vigencia se cruza con [startsAt, endsAt]. `endsAt = null` se
+   * trata como "sin vencimiento" (rango abierto a futuro).
+   */
+  findOverlapping(
+    storeId: string,
+    scope: PromotionScope,
+    targetId: string,
+    startsAt: Date,
+    endsAt: Date | null,
+    excludeId?: string,
+  ): Promise<Promotion[]> {
+    const qb = this.orm
+      .createQueryBuilder('p')
+      .where('p.storeId = :storeId', { storeId })
+      .andWhere('p.scope = :scope', { scope })
+      .andWhere('p.targetId = :targetId', { targetId })
+      .andWhere('p.isActive = true')
+      // p.startsAt <= newEndsAt (o newEndsAt es null => sin límite superior)
+      .andWhere('(:endsAt IS NULL OR p.startsAt <= :endsAt)', { endsAt })
+      // newStartsAt <= p.endsAt (o p.endsAt es null => sin límite superior)
+      .andWhere('(p.endsAt IS NULL OR p.endsAt >= :startsAt)', { startsAt });
+
+    if (excludeId) {
+      qb.andWhere('p.id != :excludeId', { excludeId });
+    }
+
+    return qb.getMany();
+  }
+
   async create(dto: CreatePromotionDto): Promise<Promotion> {
     const promotion = this.orm.create({
       storeId: dto.storeId,

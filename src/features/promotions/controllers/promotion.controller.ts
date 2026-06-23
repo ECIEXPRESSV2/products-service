@@ -30,6 +30,8 @@ import { CreatePromotionDto } from '../dto/create-promotion.dto';
 import { UpdatePromotionDto } from '../dto/update-promotion.dto';
 import { Promotion, PromotionScope } from '../entities/promotion.entity';
 import { RequireRoles } from '../../../common/decorators/require-roles.decorator';
+import { CurrentUser } from '../../../common/decorators/current-user.decorator';
+import type { AuthenticatedUser } from '../../../common/auth/identity-auth.client';
 
 @ApiTags('Promotions')
 @ApiBearerAuth()
@@ -109,8 +111,11 @@ export class PromotionController {
   @RequireRoles('VENDOR', 'ADMIN')
   @ApiOperation({ summary: 'Crear una nueva promoción' })
   @ApiOkResponse({ type: Promotion })
-  create(@Body() dto: CreatePromotionDto): Promise<Promotion> {
-    return this.service.create(dto);
+  create(
+    @Body() dto: CreatePromotionDto,
+    @CurrentUser() user?: AuthenticatedUser,
+  ): Promise<Promotion> {
+    return this.service.create(dto, user?.userId);
   }
 
   @Patch(':id')
@@ -121,8 +126,9 @@ export class PromotionController {
   update(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdatePromotionDto,
+    @CurrentUser() user?: AuthenticatedUser,
   ): Promise<Promotion> {
-    return this.service.update(id, dto);
+    return this.service.update(id, dto, user?.userId);
   }
 
   @Patch(':id/activate')
@@ -147,7 +153,10 @@ export class PromotionController {
   @ApiOperation({ summary: 'Eliminar una promoción' })
   @ApiNoContentResponse()
   @ApiNotFoundResponse()
-  remove(@Param('id', ParseUUIDPipe) id: string): Promise<void> {
-    return this.service.remove(id);
+  remove(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user?: AuthenticatedUser,
+  ): Promise<void> {
+    return this.service.remove(id, user?.userId);
   }
 }

@@ -18,6 +18,8 @@ import type { IInventoryService } from '../../inventory/services/inventory.servi
 import { INVENTORY_SERVICE } from '../../inventory/services/inventory.service.interface';
 import { MovementType } from '../../inventory/entities/inventory-movement.entity';
 import { StoreValidator } from '../../stores/services/store-validator';
+import { SharedEventPublisher } from '../../../messaging/shared-bus/shared-event-publisher.service';
+import { PUBLISHED_PRODUCT_EVENTS } from '../../../messaging/shared-bus/contracts';
 
 @Injectable()
 export class ProductService implements IProductService {
@@ -31,6 +33,7 @@ export class ProductService implements IProductService {
     private readonly storeValidator: StoreValidator,
     @Inject(INVENTORY_SERVICE)
     private readonly inventoryService: IInventoryService,
+    private readonly sharedEventPublisher: SharedEventPublisher,
     @Inject(WINSTON_MODULE_NEST_PROVIDER)
     private readonly logger: LoggerService,
   ) {}
@@ -74,7 +77,7 @@ export class ProductService implements IProductService {
     return product;
   }
 
-  async create(dto: CreateProductDto): Promise<Product> {
+  async create(dto: CreateProductDto, performedBy?: string): Promise<Product> {
     this.logger.log(
       `Creating product slug="${dto.slug}" store=${dto.storeId}`,
       ProductService.name,
@@ -94,6 +97,7 @@ export class ProductService implements IProductService {
       entityId: product.id,
       action: AuditAction.CREATE,
       afterData: this.toAuditData(product),
+      performedBy,
     });
 
     this.publisher.productCreated({
@@ -110,7 +114,7 @@ export class ProductService implements IProductService {
     return product;
   }
 
-  async update(id: string, dto: UpdateProductDto): Promise<Product> {
+  async update(id: string, dto: UpdateProductDto, performedBy?: string): Promise<Product> {
     this.logger.log(`Updating product id=${id}`, ProductService.name);
     const before = await this.findById(id);
 
@@ -139,6 +143,7 @@ export class ProductService implements IProductService {
       action: AuditAction.UPDATE,
       beforeData: this.toAuditData(before),
       afterData: this.toAuditData(updated),
+      performedBy,
     });
 
     this.publisher.productUpdated({ id, storeId: updated.storeId, ...dto });
@@ -245,6 +250,7 @@ export class ProductService implements IProductService {
     });
 
     this.publisher.productUpdated({ id, storeId: updated.storeId, stock: newStock });
+    await this.checkAndPublishLowStock(updated);
     return updated;
   }
 
@@ -300,7 +306,7 @@ export class ProductService implements IProductService {
       );
     }
     const newReserved = Math.max(0, product.reservedStock - quantity);
-    await this.productRepository.setStockAndReserved(productId, newStock, newReserved);
+    const updated = await this.productRepository.setStockAndReserved(productId, newStock, newReserved);
     await this.inventoryService.logMovement({
       productId,
       storeId: product.storeId,
@@ -312,9 +318,12 @@ export class ProductService implements IProductService {
       reservedStockAfter: newReserved,
       referenceId: orderId,
     });
+    if (updated) {
+      await this.checkAndPublishLowStock(updated);
+    }
   }
 
-  async remove(id: string): Promise<void> {
+  async remove(id: string, performedBy?: string): Promise<void> {
     this.logger.log(`Removing product id=${id}`, ProductService.name);
     const product = await this.findById(id);
 
@@ -327,6 +336,7 @@ export class ProductService implements IProductService {
       entityId: id,
       action: AuditAction.DELETE,
       beforeData: this.toAuditData(product),
+      performedBy,
     });
 
     this.publisher.productDeleted({ id, storeId: product.storeId });
@@ -372,6 +382,26 @@ export class ProductService implements IProductService {
     if (existing && existing.id !== excludeId) {
       throw new ConflictException(`Ya existe un producto con el SKU "${sku}" en esta tienda`);
     }
+  }
+
+  /**
+   * CU-04: si el stock disponible (stock - reservedStock) cae a `minStock` o
+   * por debajo, publica `inventory.low_stock` para que los consumidores
+   * (e.g. notificaciones a vendedores) puedan alertar reabastecimiento.
+   */
+  private async checkAndPublishLowStock(product: Product): Promise<void> {
+    if (product.minStock <= 0) return;
+    const available = product.stock - product.reservedStock;
+    if (available > product.minStock) return;
+
+    await this.sharedEventPublisher.publish(PUBLISHED_PRODUCT_EVENTS.LOW_STOCK, {
+      productId: product.id,
+      storeId: product.storeId,
+      name: product.name,
+      stock: product.stock,
+      reservedStock: product.reservedStock,
+      minStock: product.minStock,
+    });
   }
 
   private toAuditData(product: Product): Record<string, unknown> {

@@ -1,4 +1,4 @@
-import { BadRequestException, Inject, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Inject, Injectable, NotFoundException } from '@nestjs/common';
 import type { LoggerService } from '@nestjs/common';
 import { WINSTON_MODULE_NEST_PROVIDER } from 'nest-winston';
 import { EffectivePriceResult, IPromotionService } from './promotion.service.interface';
@@ -46,13 +46,20 @@ export class PromotionService implements IPromotionService {
     return promotion;
   }
 
-  async create(dto: CreatePromotionDto): Promise<Promotion> {
+  async create(dto: CreatePromotionDto, performedBy?: string): Promise<Promotion> {
     this.logger.log(`Creating promotion name="${dto.name}" store=${dto.storeId}`, PromotionService.name);
 
     this.assertValidValue(dto.type, dto.value);
     if (dto.endsAt) {
       this.assertValidDateRange(dto.startsAt, dto.endsAt);
     }
+    await this.assertNoOverlap(
+      dto.storeId,
+      dto.scope,
+      dto.targetId,
+      new Date(dto.startsAt),
+      dto.endsAt ? new Date(dto.endsAt) : null,
+    );
 
     const promotion = await this.promotionRepository.create(dto);
 
@@ -63,6 +70,7 @@ export class PromotionService implements IPromotionService {
       entityId: promotion.id,
       action: AuditAction.CREATE,
       afterData: this.toAuditData(promotion),
+      performedBy,
     });
 
     this.publisher.promotionCreated({
@@ -80,7 +88,7 @@ export class PromotionService implements IPromotionService {
     return promotion;
   }
 
-  async update(id: string, dto: UpdatePromotionDto): Promise<Promotion> {
+  async update(id: string, dto: UpdatePromotionDto, performedBy?: string): Promise<Promotion> {
     this.logger.log(`Updating promotion id=${id}`, PromotionService.name);
     const before = await this.findById(id);
 
@@ -94,6 +102,17 @@ export class PromotionService implements IPromotionService {
       this.assertValidDateRange(targetStartsAt, targetEndsAt);
     }
 
+    const targetScope = dto.scope ?? before.scope;
+    const targetId = dto.targetId ?? before.targetId;
+    await this.assertNoOverlap(
+      before.storeId,
+      targetScope,
+      targetId,
+      new Date(targetStartsAt),
+      targetEndsAt ? new Date(targetEndsAt) : null,
+      id,
+    );
+
     const updated = await this.promotionRepository.update(id, dto);
     if (!updated) throw new NotFoundException(`Promoción con id "${id}" no encontrada`);
 
@@ -103,6 +122,7 @@ export class PromotionService implements IPromotionService {
       action: AuditAction.UPDATE,
       beforeData: this.toAuditData(before),
       afterData: this.toAuditData(updated),
+      performedBy,
     });
 
     this.publisher.promotionUpdated({
@@ -152,7 +172,7 @@ export class PromotionService implements IPromotionService {
     return updated;
   }
 
-  async remove(id: string): Promise<void> {
+  async remove(id: string, performedBy?: string): Promise<void> {
     this.logger.log(`Removing promotion id=${id}`, PromotionService.name);
     const promotion = await this.findById(id);
     await this.promotionRepository.remove(id);
@@ -161,6 +181,7 @@ export class PromotionService implements IPromotionService {
       entityId: id,
       action: AuditAction.DELETE,
       beforeData: this.toAuditData(promotion),
+      performedBy,
     });
     this.publisher.promotionDeleted({ id, storeId: promotion.storeId });
   }
@@ -223,6 +244,35 @@ export class PromotionService implements IPromotionService {
   private assertValidDateRange(startsAt: string, endsAt: string): void {
     if (new Date(endsAt) <= new Date(startsAt)) {
       throw new BadRequestException('La fecha de fin debe ser posterior a la fecha de inicio');
+    }
+  }
+
+  /**
+   * CU-06: impide crear/actualizar una promoción activa cuyo rango de
+   * vigencia se cruce con otra promoción activa ya existente para el mismo
+   * target (producto o categoría) en la misma tienda.
+   */
+  private async assertNoOverlap(
+    storeId: string,
+    scope: PromotionScope,
+    targetId: string,
+    startsAt: Date,
+    endsAt: Date | null,
+    excludeId?: string,
+  ): Promise<void> {
+    const overlapping = await this.promotionRepository.findOverlapping(
+      storeId,
+      scope,
+      targetId,
+      startsAt,
+      endsAt,
+      excludeId,
+    );
+    if (overlapping.length > 0) {
+      throw new ConflictException(
+        `Ya existe una promoción activa para este ${scope === PromotionScope.PRODUCT ? 'producto' : 'categoría'} ` +
+          `cuyo rango de vigencia se cruza con el indicado (conflicto con id "${overlapping[0].id}")`,
+      );
     }
   }
 
