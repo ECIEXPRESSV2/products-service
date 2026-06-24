@@ -15,6 +15,7 @@ import { CreateProductDto } from '../dto/create-product.dto';
 import { StockOperation } from '../dto/adjust-stock.dto';
 import type { IInventoryService } from '../../inventory/services/inventory.service.interface';
 import { INVENTORY_SERVICE } from '../../inventory/services/inventory.service.interface';
+import { SharedEventPublisher } from '../../../messaging/shared-bus/shared-event-publisher.service';
 
 const STORE_ID = 'f47ac10b-58cc-4372-a567-0e02b2c3d479';
 const PRODUCT_ID = 'b2cc188e-9bf9-4888-aa12-ace4e6543111';
@@ -88,6 +89,7 @@ describe('ProductService', () => {
       setActive: jest.fn(),
       softDelete: jest.fn(),
       existsById: jest.fn(),
+      countActiveByCategory: jest.fn(),
     };
 
     const categoryRepoMock: jest.Mocked<ICategoryRepository> = {
@@ -127,6 +129,10 @@ describe('ProductService', () => {
 
     const loggerMock = { log: jest.fn(), warn: jest.fn(), error: jest.fn() };
 
+    const sharedEventPublisherMock = {
+      publish: jest.fn().mockResolvedValue(undefined),
+    } as unknown as jest.Mocked<SharedEventPublisher>;
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         ProductService,
@@ -136,6 +142,7 @@ describe('ProductService', () => {
         { provide: AuditService, useValue: auditMock },
         { provide: StoreValidator, useValue: storeValidatorMock },
         { provide: INVENTORY_SERVICE, useValue: inventoryMock },
+        { provide: SharedEventPublisher, useValue: sharedEventPublisherMock },
         { provide: WINSTON_MODULE_NEST_PROVIDER, useValue: loggerMock },
       ],
     }).compile();

@@ -10,6 +10,8 @@ import { StoreValidator } from '../../stores/services/store-validator';
 import { Category } from '../entities/category.entity';
 import { CreateCategoryDto } from '../dto/create-category.dto';
 import { UpdateCategoryDto } from '../dto/update-category.dto';
+import { PRODUCT_REPOSITORY } from '../../products/repositories/product.repository.interface';
+import type { IProductRepository } from '../../products/repositories/product.repository.interface';
 
 const STORE_ID = 'f47ac10b-58cc-4372-a567-0e02b2c3d479';
 const CAT_ID = 'a3bb189e-8bf9-3888-9912-ace4e6543002';
@@ -35,6 +37,7 @@ function makeCategory(overrides: Partial<Category> = {}): Category {
 describe('CategoryService', () => {
   let service: CategoryService;
   let repo: jest.Mocked<ICategoryRepository>;
+  let productRepo: jest.Mocked<IProductRepository>;
   let publisher: jest.Mocked<CategoryPublisher>;
   let auditService: jest.Mocked<AuditService>;
 
@@ -49,6 +52,27 @@ describe('CategoryService', () => {
       update: jest.fn(),
       softDelete: jest.fn(),
       existsById: jest.fn(),
+    };
+
+    const productRepoMock: jest.Mocked<IProductRepository> = {
+      findAll: jest.fn(),
+      findAllPaginated: jest.fn(),
+      findByCategory: jest.fn(),
+      findByCategoryPaginated: jest.fn(),
+      findLowStock: jest.fn(),
+      search: jest.fn(),
+      findById: jest.fn(),
+      findBySlugAndStore: jest.fn(),
+      findBySkuAndStore: jest.fn(),
+      create: jest.fn(),
+      update: jest.fn(),
+      setStock: jest.fn(),
+      adjustReservedStock: jest.fn(),
+      setStockAndReserved: jest.fn(),
+      setActive: jest.fn(),
+      softDelete: jest.fn(),
+      existsById: jest.fn(),
+      countActiveByCategory: jest.fn().mockResolvedValue(0),
     };
 
     const publisherMock = {
@@ -79,6 +103,7 @@ describe('CategoryService', () => {
       providers: [
         CategoryService,
         { provide: CATEGORY_REPOSITORY, useValue: repoMock },
+        { provide: PRODUCT_REPOSITORY, useValue: productRepoMock },
         { provide: CategoryPublisher, useValue: publisherMock },
         { provide: AuditService, useValue: auditMock },
         { provide: StoreValidator, useValue: storeValidatorMock },
@@ -88,6 +113,7 @@ describe('CategoryService', () => {
 
     service = module.get(CategoryService);
     repo = repoMock;
+    productRepo = productRepoMock;
     publisher = publisherMock;
     auditService = auditMock;
   });
@@ -284,6 +310,15 @@ describe('CategoryService', () => {
     it('throws ConflictException when category has active children', async () => {
       repo.findById.mockResolvedValue(makeCategory());
       repo.findChildrenOf.mockResolvedValue([makeCategory({ id: 'child-1' })]);
+
+      await expect(service.remove(CAT_ID)).rejects.toThrow(ConflictException);
+      expect(repo.softDelete).not.toHaveBeenCalled();
+    });
+
+    it('throws ConflictException when category has active products', async () => {
+      repo.findById.mockResolvedValue(makeCategory());
+      repo.findChildrenOf.mockResolvedValue([]);
+      productRepo.countActiveByCategory.mockResolvedValue(2);
 
       await expect(service.remove(CAT_ID)).rejects.toThrow(ConflictException);
       expect(repo.softDelete).not.toHaveBeenCalled();

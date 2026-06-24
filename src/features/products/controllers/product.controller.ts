@@ -37,6 +37,8 @@ import { PaginationDto } from '../dto/pagination.dto';
 import { PaginatedProductResult } from '../dto/paginated-result.dto';
 import { Product } from '../entities/product.entity';
 import { RequireRoles } from '../../../common/decorators/require-roles.decorator';
+import { CurrentUser } from '../../../common/decorators/current-user.decorator';
+import type { AuthenticatedUser } from '../../../common/auth/identity-auth.client';
 
 const STORE_ID_EXAMPLE = 'f47ac10b-58cc-4372-a567-0e02b2c3d479';
 const PRODUCT_ID_EXAMPLE = 'b2cc188e-9bf9-4888-aa12-ace4e6543111';
@@ -178,8 +180,11 @@ export class ProductController {
   @ApiConflictResponse({ description: 'Slug o SKU duplicado, o categoría de otra tienda' })
   @ApiNotFoundResponse({ description: 'Categoría no encontrada' })
   @ApiBadRequestResponse({ description: 'Datos de entrada inválidos' })
-  create(@Body() dto: CreateProductDto): Promise<Product> {
-    return this.productService.create(dto);
+  create(
+    @Body() dto: CreateProductDto,
+    @CurrentUser() user?: AuthenticatedUser,
+  ): Promise<Product> {
+    return this.productService.create(dto, user?.userId);
   }
 
   @Patch(':id')
@@ -196,8 +201,9 @@ export class ProductController {
   update(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdateProductDto,
+    @CurrentUser() user?: AuthenticatedUser,
   ): Promise<Product> {
-    return this.productService.update(id, dto);
+    return this.productService.update(id, dto, user?.userId);
   }
 
   // ── Gestión de disponibilidad (RF-04 / RF-05) ────────────────────────────
@@ -263,7 +269,10 @@ export class ProductController {
   @ApiParam({ name: 'id', type: String, format: 'uuid', example: PRODUCT_ID_EXAMPLE })
   @ApiNoContentResponse({ description: 'Producto eliminado' })
   @ApiNotFoundResponse({ description: 'Producto no encontrado' })
-  async remove(@Param('id', ParseUUIDPipe) id: string): Promise<void> {
-    return this.productService.remove(id);
+  async remove(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user?: AuthenticatedUser,
+  ): Promise<void> {
+    return this.productService.remove(id, user?.userId);
   }
 }

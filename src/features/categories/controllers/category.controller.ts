@@ -33,6 +33,8 @@ import { CreateCategoryDto } from '../dto/create-category.dto';
 import { UpdateCategoryDto } from '../dto/update-category.dto';
 import { Category } from '../entities/category.entity';
 import { RequireRoles } from '../../../common/decorators/require-roles.decorator';
+import { CurrentUser } from '../../../common/decorators/current-user.decorator';
+import type { AuthenticatedUser } from '../../../common/auth/identity-auth.client';
 
 const STORE_ID_EXAMPLE = 'f47ac10b-58cc-4372-a567-0e02b2c3d479';
 
@@ -123,8 +125,11 @@ export class CategoryController {
   @ApiConflictResponse({ description: 'El slug ya existe en la tienda' })
   @ApiNotFoundResponse({ description: 'La categoría padre (parentId) no existe' })
   @ApiBadRequestResponse({ description: 'Datos de entrada inválidos' })
-  create(@Body() dto: CreateCategoryDto): Promise<Category> {
-    return this.categoryService.create(dto);
+  create(
+    @Body() dto: CreateCategoryDto,
+    @CurrentUser() user?: AuthenticatedUser,
+  ): Promise<Category> {
+    return this.categoryService.create(dto, user?.userId);
   }
 
   @Patch(':id')
@@ -148,8 +153,9 @@ export class CategoryController {
   update(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdateCategoryDto,
+    @CurrentUser() user?: AuthenticatedUser,
   ): Promise<Category> {
-    return this.categoryService.update(id, dto);
+    return this.categoryService.update(id, dto, user?.userId);
   }
 
   @Delete(':id')
@@ -170,7 +176,10 @@ export class CategoryController {
   @ApiNoContentResponse({ description: 'Categoría eliminada exitosamente' })
   @ApiNotFoundResponse({ description: 'Categoría no encontrada' })
   @ApiConflictResponse({ description: 'La categoría tiene subcategorías activas' })
-  async remove(@Param('id', ParseUUIDPipe) id: string): Promise<void> {
-    return this.categoryService.remove(id);
+  async remove(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user?: AuthenticatedUser,
+  ): Promise<void> {
+    return this.categoryService.remove(id, user?.userId);
   }
 }

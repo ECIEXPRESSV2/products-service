@@ -10,9 +10,9 @@ export interface ICategoryService {
   findAll(storeId: string): Promise<Category[]>;
   findById(id: string): Promise<Category>;
   findTree(storeId: string): Promise<Category[]>;
-  create(dto: CreateCategoryDto): Promise<Category>;
-  update(id: string, dto: UpdateCategoryDto): Promise<Category>;
-  remove(id: string): Promise<void>;
+  create(dto: CreateCategoryDto, performedBy?: string): Promise<Category>;
+  update(id: string, dto: UpdateCategoryDto, performedBy?: string): Promise<Category>;
+  remove(id: string, performedBy?: string): Promise<void>;
 }
 
 export const CATEGORY_SERVICE = Symbol('ICategoryService');
