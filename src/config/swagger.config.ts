@@ -15,19 +15,20 @@ Microservicio de gestión de productos para una plataforma multi-tienda.
 - **Multi-tienda**: Cada tienda posee su propio árbol de categorías aislado
 - **Soft Delete**: Las eliminaciones desactivan el registro sin borrarlo físicamente
 - **Auditoría**: Cada mutación queda registrada en la tabla \`audit_logs\`
-- **Eventos**: Cada operación publica un evento en RabbitMQ (\`products_events\`)
+- **Eventos**: Cada operación publica un evento en el bus compartido RabbitMQ (\`eciexpress_events\`)
 
 ### Autenticación
-Requiere \`Authorization: Bearer <token Firebase>\`. El token se valida por introspección
-contra \`GET /auth/validate\` en identity-service (no se verifica Firebase localmente).
+products-service NO valida el token de Firebase: confía en el API Gateway, que autentica al
+usuario y reenvía la petición con los headers \`x-user-id\` (obligatorio) y \`x-user-role\`.
 Autorización por rol (\`BUYER\`, \`VENDOR\`, \`ADMIN\`, \`ANALYST\`) vía \`@RequireRoles\`; \`ADMIN\`
-siempre tiene acceso.
+siempre tiene acceso. Para probar desde Swagger, define \`x-user-id\` (y \`x-user-role\`).
       `.trim(),
     )
     .setVersion('1.0.0')
     .setContact('Backend Team', '', 'backend@products-service.io')
     .setLicense('UNLICENSED', '')
-    .addBearerAuth()
+    .addApiKey({ type: 'apiKey', in: 'header', name: 'x-user-id' }, 'x-user-id')
+    .addApiKey({ type: 'apiKey', in: 'header', name: 'x-user-role' }, 'x-user-role')
     .addTag('Categories', 'Gestión de categorías de productos')
     .addTag('Audit', 'Consulta de registros de auditoría')
     .addServer(`http://localhost:${process.env.PORT ?? 3000}`, 'Local development')

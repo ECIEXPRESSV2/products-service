@@ -6,7 +6,7 @@ import { CATEGORY_REPOSITORY } from './repositories/category.repository.interfac
 import { CategoryService } from './services/category.service';
 import { CATEGORY_SERVICE } from './services/category.service.interface';
 import { CategoryController } from './controllers/category.controller';
-import { RabbitMQModule } from '../../messaging/rabbitmq.module';
+import { CategoryPublisher } from '../../messaging/publishers/category.publisher';
 import { AuditModule } from '../audit/audit.module';
 import { StoresModule } from '../stores/stores.module';
 import { Product } from '../products/entities/product.entity';
@@ -16,12 +16,13 @@ import { PRODUCT_REPOSITORY } from '../products/repositories/product.repository.
 @Module({
   imports: [
     TypeOrmModule.forFeature([Category, Product]),
-    RabbitMQModule,
     AuditModule,
     StoresModule,
   ],
   controllers: [CategoryController],
   providers: [
+    // El publisher viaja por el bus compartido (SharedEventPublisher, global).
+    CategoryPublisher,
     { provide: CATEGORY_REPOSITORY, useClass: CategoryRepository },
     { provide: CATEGORY_SERVICE, useClass: CategoryService },
     // ProductRepository se necesita en CategoryService para impedir borrar

@@ -1,10 +1,11 @@
 /**
  * Configuración del bus de eventos COMPARTIDO de la plataforma ECIExpress.
  *
- * A diferencia de `messaging/rabbitmq.module.ts` (que usa el transporte NestJS RMQ
- * con la cola privada `products_events` para los eventos internos de catálogo), este
- * módulo se conecta al exchange topic compartido `eciexpress_events`, por el que
- * viajan los eventos entre microservicios (orders, financial, fulfillment, ...).
+ * Este es el ÚNICO bus de eventos de products-service: el exchange topic compartido
+ * `eciexpress_events`, por el que viajan todos los eventos del servicio — tanto los
+ * de integración entre microservicios (cotización de carrito, stock) como los de
+ * catálogo (category, item, promotion), que antes usaban la cola directa
+ * `products_events` vía NestJS Transport.RMQ (ya eliminada).
  *
  * La URL de conexión llega SIEMPRE por la variable de entorno RABBITMQ_URL.
  */

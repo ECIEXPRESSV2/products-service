@@ -34,7 +34,7 @@ import { UpdateCategoryDto } from '../dto/update-category.dto';
 import { Category } from '../entities/category.entity';
 import { RequireRoles } from '../../../common/decorators/require-roles.decorator';
 import { CurrentUser } from '../../../common/decorators/current-user.decorator';
-import type { AuthenticatedUser } from '../../../common/auth/identity-auth.client';
+import type { AuthenticatedUser } from '../../../common/guards/gateway-auth.guard';
 
 const STORE_ID_EXAMPLE = 'f47ac10b-58cc-4372-a567-0e02b2c3d479';
 

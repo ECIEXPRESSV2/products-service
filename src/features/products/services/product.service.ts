@@ -386,7 +386,7 @@ export class ProductService implements IProductService {
 
   /**
    * CU-04: si el stock disponible (stock - reservedStock) cae a `minStock` o
-   * por debajo, publica `inventory.low_stock` para que los consumidores
+   * por debajo, publica `product.inventory.low_stock` para que los consumidores
    * (e.g. notificaciones a vendedores) puedan alertar reabastecimiento.
    */
   private async checkAndPublishLowStock(product: Product): Promise<void> {

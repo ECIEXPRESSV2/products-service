@@ -1,7 +1,7 @@
 import { CanActivate, ExecutionContext, ForbiddenException, Injectable } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { ROLES_KEY } from '../decorators/require-roles.decorator';
-import type { RequestWithUser } from './remote-auth.guard';
+import type { RequestWithUser } from './gateway-auth.guard';
 
 /**
  * Equivalente a PermissionsGuard de identity-service, pero por nombre de

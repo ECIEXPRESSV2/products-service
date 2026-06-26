@@ -1,42 +1,30 @@
-import { Inject, Injectable } from '@nestjs/common';
-import type { LoggerService } from '@nestjs/common';
-import { ClientProxy } from '@nestjs/microservices';
-import { WINSTON_MODULE_NEST_PROVIDER } from 'nest-winston';
+import { Injectable } from '@nestjs/common';
 import {
   PROMOTION_EVENTS,
   PromotionCreatedPayload,
   PromotionDeletedPayload,
   PromotionUpdatedPayload,
 } from '../events/promotion.events';
+import { SharedEventPublisher } from '../shared-bus/shared-event-publisher.service';
 
-export const RABBITMQ_CLIENT = 'RABBITMQ_CLIENT';
-
+/**
+ * Publica los eventos de catálogo de promociones en el exchange topic compartido
+ * `eciexpress_events` (antes iban a la cola directa `products_events` vía Transport.RMQ).
+ * La API pública no cambió: solo cambió el transporte al bus compartido.
+ */
 @Injectable()
 export class PromotionPublisher {
-  constructor(
-    @Inject(RABBITMQ_CLIENT)
-    private readonly client: ClientProxy,
-    @Inject(WINSTON_MODULE_NEST_PROVIDER)
-    private readonly logger: LoggerService,
-  ) {}
+  constructor(private readonly bus: SharedEventPublisher) {}
 
   promotionCreated(payload: PromotionCreatedPayload): void {
-    this.emit(PROMOTION_EVENTS.CREATED, payload);
+    void this.bus.publish(PROMOTION_EVENTS.CREATED, payload);
   }
 
   promotionUpdated(payload: PromotionUpdatedPayload): void {
-    this.emit(PROMOTION_EVENTS.UPDATED, payload);
+    void this.bus.publish(PROMOTION_EVENTS.UPDATED, payload);
   }
 
   promotionDeleted(payload: PromotionDeletedPayload): void {
-    this.emit(PROMOTION_EVENTS.DELETED, payload);
-  }
-
-  private emit(pattern: string, payload: unknown): void {
-    try {
-      this.client.emit(pattern, payload);
-    } catch (error) {
-      this.logger.error(`Failed to emit event ${pattern}`, error, PromotionPublisher.name);
-    }
+    void this.bus.publish(PROMOTION_EVENTS.DELETED, payload);
   }
 }

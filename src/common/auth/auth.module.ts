@@ -1,18 +1,17 @@
 import { Module } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
-import { HttpModule } from '@nestjs/axios';
-import { IdentityAuthClient } from './identity-auth.client';
-import { AuthCacheService } from './auth-cache.service';
-import { RemoteAuthGuard } from '../guards/remote-auth.guard';
+import { GatewayAuthGuard } from '../guards/gateway-auth.guard';
 import { RolesGuard } from '../guards/roles.guard';
 
+/**
+ * Auth de products-service basado en el patrón gateway: NO valida el token de Firebase,
+ * confía en los headers `x-user-id` / `x-user-role` que inyecta el API Gateway (igual que
+ * fulfillment, financial y notifications).
+ */
 @Module({
-  imports: [HttpModule],
   providers: [
-    IdentityAuthClient,
-    AuthCacheService,
-    // Orden importa: RemoteAuthGuard puebla req.user antes de que RolesGuard lo lea.
-    { provide: APP_GUARD, useClass: RemoteAuthGuard },
+    // Orden importa: GatewayAuthGuard puebla req.user antes de que RolesGuard lo lea.
+    { provide: APP_GUARD, useClass: GatewayAuthGuard },
     { provide: APP_GUARD, useClass: RolesGuard },
   ],
 })
