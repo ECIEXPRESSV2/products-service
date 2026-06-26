@@ -1,29 +1,27 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { WINSTON_MODULE_NEST_PROVIDER } from 'nest-winston';
 import { PromotionPublisher } from './promotion.publisher';
-import { RABBITMQ_CLIENT } from './category.publisher';
 import { PROMOTION_EVENTS } from '../events/promotion.events';
+import { SharedEventPublisher } from '../shared-bus/shared-event-publisher.service';
 import { PromotionScope, PromotionType } from '../../features/promotions/entities/promotion.entity';
 
 describe('PromotionPublisher', () => {
   let publisher: PromotionPublisher;
-  let clientEmit: jest.Mock;
+  let busPublish: jest.Mock;
 
   beforeEach(async () => {
-    clientEmit = jest.fn().mockReturnValue({ subscribe: jest.fn() });
+    busPublish = jest.fn().mockResolvedValue(undefined);
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         PromotionPublisher,
-        { provide: RABBITMQ_CLIENT, useValue: { emit: clientEmit } },
-        { provide: WINSTON_MODULE_NEST_PROVIDER, useValue: { log: jest.fn(), error: jest.fn() } },
+        { provide: SharedEventPublisher, useValue: { publish: busPublish } },
       ],
     }).compile();
 
     publisher = module.get(PromotionPublisher);
   });
 
-  it('emits product.promotion.created with correct payload', () => {
+  it('publishes product.promotion.created with correct payload', () => {
     const payload = {
       id: 'promo-1',
       storeId: 'store-1',
@@ -38,28 +36,22 @@ describe('PromotionPublisher', () => {
 
     publisher.promotionCreated(payload);
 
-    expect(clientEmit).toHaveBeenCalledWith(PROMOTION_EVENTS.CREATED, payload);
+    expect(busPublish).toHaveBeenCalledWith(PROMOTION_EVENTS.CREATED, payload);
   });
 
-  it('emits product.promotion.updated with correct payload', () => {
+  it('publishes product.promotion.updated with correct payload', () => {
     const payload = { id: 'promo-1', storeId: 'store-1', isActive: false };
 
     publisher.promotionUpdated(payload);
 
-    expect(clientEmit).toHaveBeenCalledWith(PROMOTION_EVENTS.UPDATED, payload);
+    expect(busPublish).toHaveBeenCalledWith(PROMOTION_EVENTS.UPDATED, payload);
   });
 
-  it('emits product.promotion.deleted with correct payload', () => {
+  it('publishes product.promotion.deleted with correct payload', () => {
     const payload = { id: 'promo-1', storeId: 'store-1' };
 
     publisher.promotionDeleted(payload);
 
-    expect(clientEmit).toHaveBeenCalledWith(PROMOTION_EVENTS.DELETED, payload);
-  });
-
-  it('swallows errors thrown by client.emit without propagating', () => {
-    clientEmit.mockImplementation(() => { throw new Error('RabbitMQ unavailable'); });
-
-    expect(() => publisher.promotionDeleted({ id: 'p', storeId: 's' })).not.toThrow();
+    expect(busPublish).toHaveBeenCalledWith(PROMOTION_EVENTS.DELETED, payload);
   });
 });

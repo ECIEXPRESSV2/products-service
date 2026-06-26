@@ -7,7 +7,6 @@ import type { IStoreSyncService } from '../services/store-sync.service.interface
 import { STORE_SYNC_SERVICE } from '../services/store-sync.service.interface';
 
 interface IdentityStoreEventEnvelope {
-  eventType: string;
   storeId: string;
 }
 
@@ -103,8 +102,10 @@ export class IdentityEventsConsumer implements OnApplicationBootstrap, OnApplica
         return;
       }
 
+      // El tipo de evento se identifica por la routing key (el envelope estándar ya
+      // no duplica `eventType` en el cuerpo).
       this.logger.log(
-        `Received ${event.eventType} (routingKey=${msg.fields.routingKey}) for store=${event.storeId}`,
+        `Received routingKey=${msg.fields.routingKey} for store=${event.storeId}`,
         IdentityEventsConsumer.name,
       );
 

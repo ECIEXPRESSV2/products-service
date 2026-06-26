@@ -31,7 +31,7 @@ import { UpdatePromotionDto } from '../dto/update-promotion.dto';
 import { Promotion, PromotionScope } from '../entities/promotion.entity';
 import { RequireRoles } from '../../../common/decorators/require-roles.decorator';
 import { CurrentUser } from '../../../common/decorators/current-user.decorator';
-import type { AuthenticatedUser } from '../../../common/auth/identity-auth.client';
+import type { AuthenticatedUser } from '../../../common/guards/gateway-auth.guard';
 
 @ApiTags('Promotions')
 @ApiBearerAuth()
