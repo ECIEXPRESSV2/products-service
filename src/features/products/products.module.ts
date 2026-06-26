@@ -6,7 +6,7 @@ import { PRODUCT_REPOSITORY } from './repositories/product.repository.interface'
 import { ProductService } from './services/product.service';
 import { PRODUCT_SERVICE } from './services/product.service.interface';
 import { ProductController } from './controllers/product.controller';
-import { RabbitMQModule } from '../../messaging/rabbitmq.module';
+import { ProductPublisher } from '../../messaging/publishers/product.publisher';
 import { AuditModule } from '../audit/audit.module';
 import { CategoriesModule } from '../categories/categories.module';
 import { CategoryRepository } from '../categories/repositories/category.repository';
@@ -18,7 +18,6 @@ import { StoresModule } from '../stores/stores.module';
 @Module({
   imports: [
     TypeOrmModule.forFeature([Product, Category]),
-    RabbitMQModule,
     AuditModule,
     CategoriesModule,
     InventoryModule,
@@ -26,6 +25,8 @@ import { StoresModule } from '../stores/stores.module';
   ],
   controllers: [ProductController],
   providers: [
+    // El publisher viaja por el bus compartido (SharedEventPublisher, global).
+    ProductPublisher,
     { provide: PRODUCT_REPOSITORY, useClass: ProductRepository },
     { provide: PRODUCT_SERVICE, useClass: ProductService },
     // CategoryRepository se necesita en ProductService para validar pertenencia a la tienda.

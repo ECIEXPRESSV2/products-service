@@ -32,9 +32,9 @@ export const PUBLISHED_PRODUCT_EVENTS = {
   /** Devolución cotizada: monto a reembolsar calculado desde la proyección. */
   RETURN_PRICED: 'products.return.priced',
   /** Stock disponible de un producto cayó a `minStock` o por debajo (CU-04). */
-  LOW_STOCK: 'inventory.low_stock',
+  LOW_STOCK: 'product.inventory.low_stock',
   /** Una reserva de stock para una línea de orden fue rechazada por falta de inventario (CU-05). */
-  RESERVATION_REJECTED: 'inventory.reservation_rejected',
+  RESERVATION_REJECTED: 'product.inventory.reservation_rejected',
 } as const;
 
 // ─── Payloads consumidos (campos que usamos del envelope de orders) ─────────

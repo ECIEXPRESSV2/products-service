@@ -38,7 +38,7 @@ import { PaginatedProductResult } from '../dto/paginated-result.dto';
 import { Product } from '../entities/product.entity';
 import { RequireRoles } from '../../../common/decorators/require-roles.decorator';
 import { CurrentUser } from '../../../common/decorators/current-user.decorator';
-import type { AuthenticatedUser } from '../../../common/auth/identity-auth.client';
+import type { AuthenticatedUser } from '../../../common/guards/gateway-auth.guard';
 
 const STORE_ID_EXAMPLE = 'f47ac10b-58cc-4372-a567-0e02b2c3d479';
 const PRODUCT_ID_EXAMPLE = 'b2cc188e-9bf9-4888-aa12-ace4e6543111';

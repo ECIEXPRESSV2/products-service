@@ -1,35 +1,31 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
-import { ClientProxy } from '@nestjs/microservices';
+import { Injectable } from '@nestjs/common';
 import {
   CATEGORY_EVENTS,
   CategoryCreatedPayload,
   CategoryDeletedPayload,
   CategoryUpdatedPayload,
 } from '../events/category.events';
+import { SharedEventPublisher } from '../shared-bus/shared-event-publisher.service';
 
-export const RABBITMQ_CLIENT = 'RABBITMQ_CLIENT';
-
+/**
+ * Publica los eventos de catálogo de categorías. Antes iban a la cola directa
+ * `products_events` (NestJS Transport.RMQ); ahora viajan por el exchange topic
+ * compartido `eciexpress_events`, igual que el resto de eventos de products.
+ * La API pública no cambió: solo cambió el transporte al bus compartido.
+ */
 @Injectable()
 export class CategoryPublisher {
-  private readonly logger = new Logger(CategoryPublisher.name);
-
-  constructor(@Inject(RABBITMQ_CLIENT) private readonly client: ClientProxy) {}
-
-  emit(event: string, payload: unknown): void {
-    this.client.emit(event, payload).subscribe({
-      error: (err: unknown) => this.logger.error(`Failed to emit "${event}"`, err),
-    });
-  }
+  constructor(private readonly bus: SharedEventPublisher) {}
 
   categoryCreated(payload: CategoryCreatedPayload): void {
-    this.emit(CATEGORY_EVENTS.CREATED, payload);
+    void this.bus.publish(CATEGORY_EVENTS.CREATED, payload);
   }
 
   categoryUpdated(payload: CategoryUpdatedPayload): void {
-    this.emit(CATEGORY_EVENTS.UPDATED, payload);
+    void this.bus.publish(CATEGORY_EVENTS.UPDATED, payload);
   }
 
   categoryDeleted(payload: CategoryDeletedPayload): void {
-    this.emit(CATEGORY_EVENTS.DELETED, payload);
+    void this.bus.publish(CATEGORY_EVENTS.DELETED, payload);
   }
 }
