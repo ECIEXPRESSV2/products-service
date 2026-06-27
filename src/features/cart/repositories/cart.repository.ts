@@ -21,6 +21,8 @@ export interface ICartRepository {
     lines: Array<Partial<CartLine>>,
     totals: { subtotalAmount: number; discountAmount: number; finalAmount: number },
   ): Promise<Cart>;
+  /** Marca una línea como efectivamente reservada en products (ver CartLine.stockReserved). */
+  markLineReserved(cartId: string, productId: string, reserved: boolean): Promise<void>;
 }
 
 @Injectable()
@@ -79,5 +81,11 @@ export class CartRepository implements ICartRepository {
       const saved = await cartRepo.findOne({ where: { id: cartId } });
       return saved!;
     });
+  }
+
+  async markLineReserved(cartId: string, productId: string, reserved: boolean): Promise<void> {
+    await this.dataSource
+      .getRepository(CartLine)
+      .update({ cartId, productId }, { stockReserved: reserved });
   }
 }

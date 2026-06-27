@@ -14,6 +14,7 @@ import { CATEGORY_REPOSITORY } from '../categories/repositories/category.reposit
 import { Category } from '../categories/entities/category.entity';
 import { InventoryModule } from '../inventory/inventory.module';
 import { StoresModule } from '../stores/stores.module';
+import { PromotionsModule } from '../promotions/promotions.module';
 
 @Module({
   imports: [
@@ -22,6 +23,7 @@ import { StoresModule } from '../stores/stores.module';
     CategoriesModule,
     InventoryModule,
     StoresModule,
+    PromotionsModule,
   ],
   controllers: [ProductController],
   providers: [

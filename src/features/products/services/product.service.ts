@@ -20,6 +20,9 @@ import { MovementType } from '../../inventory/entities/inventory-movement.entity
 import { StoreValidator } from '../../stores/services/store-validator';
 import { SharedEventPublisher } from '../../../messaging/shared-bus/shared-event-publisher.service';
 import { PUBLISHED_PRODUCT_EVENTS } from '../../../messaging/shared-bus/contracts';
+import type { IPromotionService } from '../../promotions/services/promotion.service.interface';
+import { PROMOTION_SERVICE } from '../../promotions/services/promotion.service.interface';
+import { ProductWithPricingDto } from '../dto/product-with-pricing.dto';
 
 @Injectable()
 export class ProductService implements IProductService {
@@ -34,6 +37,8 @@ export class ProductService implements IProductService {
     @Inject(INVENTORY_SERVICE)
     private readonly inventoryService: IInventoryService,
     private readonly sharedEventPublisher: SharedEventPublisher,
+    @Inject(PROMOTION_SERVICE)
+    private readonly promotionService: IPromotionService,
     @Inject(WINSTON_MODULE_NEST_PROVIDER)
     private readonly logger: LoggerService,
   ) {}
@@ -41,6 +46,30 @@ export class ProductService implements IProductService {
   findAll(storeId: string, includeInactive = false): Promise<Product[]> {
     this.logger.log(`Listing products for store ${storeId}`, ProductService.name);
     return this.productRepository.findAll(storeId, includeInactive);
+  }
+
+  /**
+   * Igual que `findAll`, pero con el precio efectivo (con promoción aplicada) por
+   * producto. Es lo que debe consumir cualquier cliente que vaya a usar el precio
+   * para cobrar (ej. orders-service al crear un pedido) — `findAll` solo trae el
+   * precio base de catálogo.
+   */
+  async findAllWithPricing(storeId: string, includeInactive = false): Promise<ProductWithPricingDto[]> {
+    const products = await this.findAll(storeId, includeInactive);
+    return Promise.all(
+      products.map(async (product) => {
+        const pricing = await this.promotionService.calculateEffectivePrice(
+          storeId,
+          product.id,
+          product.categoryId,
+          parseFloat(product.price),
+        );
+        return Object.assign(new ProductWithPricingDto(), product, {
+          effectivePrice: pricing.effectivePrice,
+          discountAmount: pricing.discount,
+        });
+      }),
+    );
   }
 
   findAllPaginated(storeId: string, page: number, limit: number, includeInactive = false): Promise<PaginatedProductResult> {
@@ -292,6 +321,29 @@ export class ProductService implements IProductService {
       stockAfter: product.stock,
       reservedStockBefore: product.reservedStock,
       reservedStockAfter: newReserved,
+      referenceId: orderId,
+    });
+  }
+
+  /**
+   * Cancelación de una orden que ya había sido CONFIRMED: `confirmReservation`
+   * ya descontó `stock` (venta concretada) y dejó `reservedStock` en 0, así que
+   * aquí se devuelve la unidad a `stock` — no hay reserva que liberar.
+   */
+  async restoreStock(productId: string, quantity: number, orderId: string): Promise<void> {
+    this.logger.log(`Restoring ${quantity} units product=${productId} order=${orderId}`, ProductService.name);
+    const product = await this.findById(productId);
+    const newStock = product.stock + quantity;
+    await this.productRepository.setStock(productId, newStock);
+    await this.inventoryService.logMovement({
+      productId,
+      storeId: product.storeId,
+      type: MovementType.RETURN,
+      quantity,
+      stockBefore: product.stock,
+      stockAfter: newStock,
+      reservedStockBefore: product.reservedStock,
+      reservedStockAfter: product.reservedStock,
       referenceId: orderId,
     });
   }

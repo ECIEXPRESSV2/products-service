@@ -36,6 +36,7 @@ import { AdjustStockDto } from '../dto/adjust-stock.dto';
 import { PaginationDto } from '../dto/pagination.dto';
 import { PaginatedProductResult } from '../dto/paginated-result.dto';
 import { Product } from '../entities/product.entity';
+import { ProductWithPricingDto } from '../dto/product-with-pricing.dto';
 import { RequireRoles } from '../../../common/decorators/require-roles.decorator';
 import { CurrentUser } from '../../../common/decorators/current-user.decorator';
 import type { AuthenticatedUser } from '../../../common/guards/gateway-auth.guard';
@@ -69,21 +70,24 @@ export class ProductController {
   @ApiQuery({ name: 'categoryId', required: false, type: String, format: 'uuid', description: 'Filtrar por categoría' })
   @ApiQuery({ name: 'search', required: false, type: String, example: 'café', description: 'Búsqueda parcial por nombre (case-insensitive)' })
   @ApiQuery({ name: 'includeInactive', required: false, type: Boolean, example: false, description: 'Incluir productos inactivos' })
-  @ApiOkResponse({ description: 'Lista de productos', type: [Product] })
+  @ApiOkResponse({
+    description: 'Lista de productos, con `effectivePrice`/`discountAmount` (promoción aplicada, si hay)',
+    type: [ProductWithPricingDto],
+  })
   @ApiBadRequestResponse({ description: 'Parámetros inválidos' })
-  findAll(
+  async findAll(
     @Query('storeId', ParseUUIDPipe) storeId: string,
     @Query('categoryId') categoryId?: string,
     @Query('search') search?: string,
     @Query('includeInactive', new ParseBoolPipe({ optional: true })) includeInactive?: boolean,
-  ): Promise<Product[]> {
+  ): Promise<Product[] | ProductWithPricingDto[]> {
     if (search) {
       return this.productService.search(storeId, search);
     }
     if (categoryId) {
       return this.productService.findByCategory(storeId, categoryId, includeInactive);
     }
-    return this.productService.findAll(storeId, includeInactive);
+    return this.productService.findAllWithPricing(storeId, includeInactive);
   }
 
   @Get('store/:storeId')
