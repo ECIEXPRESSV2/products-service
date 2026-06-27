@@ -3,6 +3,7 @@ import { CreateProductDto } from '../dto/create-product.dto';
 import { UpdateProductDto } from '../dto/update-product.dto';
 import { AdjustStockDto } from '../dto/adjust-stock.dto';
 import { PaginatedProductResult } from '../dto/paginated-result.dto';
+import { ProductWithPricingDto } from '../dto/product-with-pricing.dto';
 
 /**
  * ISP: contrato mínimo que el controlador necesita; no expone detalles de infraestructura.
@@ -10,6 +11,7 @@ import { PaginatedProductResult } from '../dto/paginated-result.dto';
  */
 export interface IProductService {
   findAll(storeId: string, includeInactive?: boolean): Promise<Product[]>;
+  findAllWithPricing(storeId: string, includeInactive?: boolean): Promise<ProductWithPricingDto[]>;
   findAllPaginated(storeId: string, page: number, limit: number, includeInactive?: boolean): Promise<PaginatedProductResult>;
   findByCategory(storeId: string, categoryId: string, includeInactive?: boolean): Promise<Product[]>;
   findByCategoryPaginated(storeId: string, categoryId: string, page: number, limit: number, includeInactive?: boolean): Promise<PaginatedProductResult>;
@@ -23,6 +25,7 @@ export interface IProductService {
   adjustStock(id: string, dto: AdjustStockDto): Promise<Product>;
   reserveStock(productId: string, quantity: number, orderId: string): Promise<void>;
   releaseStock(productId: string, quantity: number, orderId: string): Promise<void>;
+  restoreStock(productId: string, quantity: number, orderId: string): Promise<void>;
   confirmReservation(productId: string, quantity: number, orderId: string): Promise<void>;
   remove(id: string, performedBy?: string): Promise<void>;
 }

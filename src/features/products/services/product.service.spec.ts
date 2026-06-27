@@ -16,6 +16,8 @@ import { StockOperation } from '../dto/adjust-stock.dto';
 import type { IInventoryService } from '../../inventory/services/inventory.service.interface';
 import { INVENTORY_SERVICE } from '../../inventory/services/inventory.service.interface';
 import { SharedEventPublisher } from '../../../messaging/shared-bus/shared-event-publisher.service';
+import type { IPromotionService } from '../../promotions/services/promotion.service.interface';
+import { PROMOTION_SERVICE } from '../../promotions/services/promotion.service.interface';
 
 const STORE_ID = 'f47ac10b-58cc-4372-a567-0e02b2c3d479';
 const PRODUCT_ID = 'b2cc188e-9bf9-4888-aa12-ace4e6543111';
@@ -133,6 +135,24 @@ describe('ProductService', () => {
       publish: jest.fn().mockResolvedValue(undefined),
     } as unknown as jest.Mocked<SharedEventPublisher>;
 
+    const promotionServiceMock: jest.Mocked<IPromotionService> = {
+      findAll: jest.fn(),
+      findActive: jest.fn(),
+      findByTarget: jest.fn(),
+      findById: jest.fn(),
+      create: jest.fn(),
+      update: jest.fn(),
+      activate: jest.fn(),
+      deactivate: jest.fn(),
+      remove: jest.fn(),
+      calculateEffectivePrice: jest.fn().mockResolvedValue({
+        basePrice: 0,
+        effectivePrice: 0,
+        discount: 0,
+        appliedPromotion: null,
+      }),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         ProductService,
@@ -143,6 +163,7 @@ describe('ProductService', () => {
         { provide: StoreValidator, useValue: storeValidatorMock },
         { provide: INVENTORY_SERVICE, useValue: inventoryMock },
         { provide: SharedEventPublisher, useValue: sharedEventPublisherMock },
+        { provide: PROMOTION_SERVICE, useValue: promotionServiceMock },
         { provide: WINSTON_MODULE_NEST_PROVIDER, useValue: loggerMock },
       ],
     }).compile();

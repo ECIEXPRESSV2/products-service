@@ -65,6 +65,13 @@ export interface ReturnRequestedPayload {
   items?: CartItemInput[];
 }
 
+export interface OrderCancelledPayload {
+  orderId: string;
+  /** true si la orden ya había sido CONFIRMED (o más allá): el stock físico ya se
+   *  descontó (venta concretada) y hay que restituirlo, no solo liberar una reserva. */
+  wasSold: boolean;
+}
+
 // ─── Payloads publicados ────────────────────────────────────────────────────
 export interface PricedCartLine {
   productId: string;

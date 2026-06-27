@@ -31,7 +31,10 @@ siempre tiene acceso. Para probar desde Swagger, define \`x-user-id\` (y \`x-use
     .addApiKey({ type: 'apiKey', in: 'header', name: 'x-user-role' }, 'x-user-role')
     .addTag('Categories', 'Gestión de categorías de productos')
     .addTag('Audit', 'Consulta de registros de auditoría')
-    .addServer(`http://localhost:${process.env.PORT ?? 3000}`, 'Local development')
+    .addServer(
+      process.env.RENDER_EXTERNAL_URL ?? `http://localhost:${process.env.PORT ?? 3000}`,
+      process.env.RENDER_EXTERNAL_URL ? 'Production' : 'Local development',
+    )
     .build();
 
   const document = SwaggerModule.createDocument(app, config);

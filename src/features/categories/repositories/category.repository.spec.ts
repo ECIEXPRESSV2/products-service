@@ -1,6 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
-import { Repository, UpdateResult } from 'typeorm';
+import { IsNull, Repository, UpdateResult } from 'typeorm';
 import { CategoryRepository } from './category.repository';
 import { Category } from '../entities/category.entity';
 import { CreateCategoryDto } from '../dto/create-category.dto';
@@ -109,14 +109,14 @@ describe('CategoryRepository', () => {
   });
 
   describe('findRootsByStore', () => {
-    it('finds root categories (parentId undefined) ordered by sortOrder', async () => {
+    it('finds root categories (parentId IS NULL) ordered by sortOrder', async () => {
       const roots = [makeCategory()];
       orm.find.mockResolvedValue(roots);
 
       const result = await categoryRepository.findRootsByStore(STORE_ID);
 
       expect(orm.find).toHaveBeenCalledWith({
-        where: { storeId: STORE_ID, parentId: undefined, isActive: true },
+        where: { storeId: STORE_ID, parentId: IsNull(), isActive: true },
         order: { sortOrder: 'ASC' },
       });
       expect(result).toBe(roots);
