@@ -20,6 +20,14 @@ import { SharedEventPublisher } from './shared-event-publisher.service';
       inject: [ConfigService],
       useFactory: (config: ConfigService) => ({
         uri: config.getOrThrow<string>('RABBITMQ_URL'),
+        // OrderEventsConsumer depende de que `order.cart.item_changed` (que escribe
+        // la proyección cart_lines) termine de procesarse ANTES que el siguiente
+        // `order.order.created` de la misma orden (que la lee para reservar stock).
+        // El default de la librería es prefetchCount=10: permite procesar varios
+        // mensajes en paralelo, lo que puede hacer que `order.order.created` se
+        // procese antes de que el insert anterior haya hecho commit, perdiendo la
+        // reserva en silencio. prefetchCount=1 fuerza orden estrictamente secuencial.
+        prefetchCount: 1,
         exchanges: [
           {
             name: SHARED_EXCHANGE_NAME,

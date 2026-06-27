@@ -51,4 +51,14 @@ export class CartLine {
 
   @Column({ name: 'applied_promotion_id', type: 'uuid', nullable: true })
   appliedPromotionId: string | null;
+
+  /**
+   * true solo si `reserveStock` se aplicó EXITOSAMENTE para esta línea específica.
+   * Necesario porque `reservedStock` en `products` es un contador global por
+   * producto, no por orden: sin este flag, liberar/restituir stock al cancelar una
+   * orden cuya reserva falló (o nunca llegó a intentarse) terminaría restando del
+   * contador global la reserva de OTRA orden que sí tuvo éxito.
+   */
+  @Column({ name: 'stock_reserved', type: 'boolean', default: false })
+  stockReserved: boolean;
 }

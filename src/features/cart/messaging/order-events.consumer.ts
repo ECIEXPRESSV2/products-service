@@ -7,6 +7,7 @@ import {
   ORDER_BINDING_PATTERN,
   type CartCreatedPayload,
   type CartItemChangedPayload,
+  type OrderCancelledPayload,
   type ReturnRequestedPayload,
 } from '../../../messaging/shared-bus/contracts';
 import { CartPricingService } from '../services/cart-pricing.service';
@@ -69,7 +70,8 @@ export class OrderEventsConsumer {
           break;
         }
         case CONSUMED_ORDER_EVENTS.ORDER_CANCELLED: {
-          await this.stock.releaseForOrder((payload as { orderId: string }).orderId);
+          const p = payload as OrderCancelledPayload;
+          await this.stock.releaseForOrder(p.orderId, p.wasSold ?? false);
           break;
         }
         default:

@@ -64,6 +64,7 @@ describe('ProductController', () => {
   beforeEach(async () => {
     const serviceMock: jest.Mocked<IProductService> = {
       findAll: jest.fn(),
+      findAllWithPricing: jest.fn(),
       findAllPaginated: jest.fn(),
       findByCategory: jest.fn(),
       findByCategoryPaginated: jest.fn(),
@@ -77,6 +78,7 @@ describe('ProductController', () => {
       adjustStock: jest.fn(),
       reserveStock: jest.fn(),
       releaseStock: jest.fn(),
+      restoreStock: jest.fn(),
       confirmReservation: jest.fn(),
       remove: jest.fn(),
     };
@@ -111,13 +113,13 @@ describe('ProductController', () => {
       expect(result).toBe(products);
     });
 
-    it('delegates to service.findAll by default', async () => {
+    it('delegates to service.findAllWithPricing by default', async () => {
       const products = [makeProduct()];
-      service.findAll.mockResolvedValue(products);
+      service.findAllWithPricing.mockResolvedValue(products as never);
 
       const result = await controller.findAll(STORE_ID);
 
-      expect(service.findAll).toHaveBeenCalledWith(STORE_ID, undefined);
+      expect(service.findAllWithPricing).toHaveBeenCalledWith(STORE_ID, undefined);
       expect(result).toBe(products);
     });
   });

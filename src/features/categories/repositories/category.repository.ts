@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { IsNull, Repository } from 'typeorm';
 import { Category } from '../entities/category.entity';
 import { ICategoryRepository } from './category.repository.interface';
 import { CreateCategoryDto } from '../dto/create-category.dto';
@@ -40,7 +40,7 @@ export class CategoryRepository implements ICategoryRepository {
 
   findRootsByStore(storeId: string): Promise<Category[]> {
     return this.orm.find({
-      where: { storeId, parentId: undefined, isActive: true },
+      where: { storeId, parentId: IsNull(), isActive: true },
       order: { sortOrder: 'ASC' },
     });
   }
