@@ -1,17 +1,22 @@
 /**
- * Configuración del bus de eventos COMPARTIDO de la plataforma ECIExpress.
+ * Configuración del bus de eventos COMPARTIDO de la plataforma ECIExpress
+ * (Azure Service Bus).
  *
- * Este es el ÚNICO bus de eventos de products-service: el exchange topic compartido
+ * Este es el ÚNICO bus de eventos de products-service: el topic compartido
  * `eciexpress_events`, por el que viajan todos los eventos del servicio — tanto los
  * de integración entre microservicios (cotización de carrito, stock) como los de
- * catálogo (category, item, promotion), que antes usaban la cola directa
- * `products_events` vía NestJS Transport.RMQ (ya eliminada).
+ * catálogo (category, item, promotion).
  *
- * La URL de conexión llega SIEMPRE por la variable de entorno RABBITMQ_URL.
+ * Autenticación PASSWORDLESS (Managed Identity vía DefaultAzureCredential): solo se
+ * necesita el FQDN del namespace, nunca una connection string en el código. Los valores
+ * llegan por entorno (inyectados por Terraform en el Container App):
+ *   SERVICE_BUS_FULLY_QUALIFIED_NAMESPACE = <namespace>.servicebus.windows.net
+ *   SERVICE_BUS_TOPIC                      = eciexpress_events
+ *   SERVICE_BUS_SUBSCRIPTION               = products-service
  */
-export const SHARED_EXCHANGE_NAME =
-  process.env.RABBITMQ_EXCHANGE ?? 'eciexpress_events';
+export const SHARED_TOPIC_NAME =
+  process.env.SERVICE_BUS_TOPIC ?? 'eciexpress_events';
 
-/** Cola propia de products-service enlazada al exchange compartido. */
-export const SHARED_QUEUE_NAME =
-  process.env.RABBITMQ_SHARED_QUEUE ?? 'products_service_queue';
+/** Subscription propia de products-service sobre el topic compartido. */
+export const SHARED_SUBSCRIPTION_NAME =
+  process.env.SERVICE_BUS_SUBSCRIPTION ?? 'products-service';

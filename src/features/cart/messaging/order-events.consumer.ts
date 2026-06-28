@@ -1,10 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { RabbitSubscribe } from '@golevelup/nestjs-rabbitmq';
-import type { ConsumeMessage } from 'amqplib';
-import { SHARED_EXCHANGE_NAME, SHARED_QUEUE_NAME } from '../../../messaging/shared-bus/shared-bus.config';
 import {
   CONSUMED_ORDER_EVENTS,
-  ORDER_BINDING_PATTERN,
   type CartCreatedPayload,
   type CartItemChangedPayload,
   type OrderCancelledPayload,
@@ -15,10 +11,10 @@ import { ReturnsPricingService } from '../services/returns-pricing.service';
 import { StockReservationService } from '../services/stock-reservation.service';
 
 /**
- * Enlaza la cola propia `products_service_queue` al exchange compartido con el patrón
- * `order.#` y despacha los eventos de carrito/devolución de orders-service a los
- * servicios de dominio. Solo reacciona a las routing keys que nos interesan; el resto
- * (que llega por el comodín) se ignora silenciosamente.
+ * Despacha los eventos `order.*` (carrito/devolución de orders-service) a los servicios
+ * de dominio. Lo invoca el ServiceBusSubscriberService con el routing-key (Subject del
+ * mensaje) y el body ya deserializado. Solo reacciona a las routing keys que nos
+ * interesan; el resto se ignora silenciosamente.
  */
 @Injectable()
 export class OrderEventsConsumer {
@@ -30,15 +26,10 @@ export class OrderEventsConsumer {
     private readonly stock: StockReservationService,
   ) {}
 
-  @RabbitSubscribe({
-    exchange: SHARED_EXCHANGE_NAME,
-    routingKey: ORDER_BINDING_PATTERN,
-    queue: SHARED_QUEUE_NAME,
-    queueOptions: { durable: true },
-    createQueueIfNotExists: true,
-  })
-  async handle(payload: unknown, amqpMsg: ConsumeMessage): Promise<void> {
-    const routingKey = amqpMsg.fields.routingKey;
+  async handle(
+    routingKey: string,
+    payload: Record<string, any>,
+  ): Promise<void> {
     try {
       switch (routingKey) {
         case CONSUMED_ORDER_EVENTS.CART_CREATED: {

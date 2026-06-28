@@ -1,48 +1,54 @@
-import { Global, Module } from '@nestjs/common';
+import {
+  Global,
+  Inject,
+  Module,
+  OnApplicationShutdown,
+} from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
-import { RabbitMQModule } from '@golevelup/nestjs-rabbitmq';
-import { SHARED_EXCHANGE_NAME } from './shared-bus.config';
+import { ServiceBusClient } from '@azure/service-bus';
+import { DefaultAzureCredential } from '@azure/identity';
 import { SharedEventPublisher } from './shared-event-publisher.service';
 
 /**
- * Módulo global del bus de eventos compartido (CloudAMQP). Declara el exchange
- * topic `eciexpress_events` y expone `AmqpConnection` (para los @RabbitSubscribe de
- * los consumidores) y `SharedEventPublisher`. La URL llega por `RABBITMQ_URL`.
+ * Token de inyección del ServiceBusClient compartido (lo usan el publisher/sender y
+ * el suscriptor/receiver).
+ */
+export const SERVICE_BUS_CLIENT = Symbol('SERVICE_BUS_CLIENT');
+
+/**
+ * Módulo global del bus de eventos compartido (Azure Service Bus). Crea un único
+ * `ServiceBusClient` autenticado con Managed Identity (DefaultAzureCredential) contra
+ * el FQDN del namespace, y expone `SharedEventPublisher`. Reemplaza al RabbitMQModule
+ * (@golevelup/amqplib).
  *
- * Es @Global para no reimportar RabbitMQModule en cada feature que consuma o
- * publique en el bus compartido.
+ * Es @Global para no reimportar en cada feature que publique en el bus compartido.
+ * Nota de orden: el consumo estrictamente secuencial que antes daba prefetchCount=1
+ * se preserva con maxConcurrentCalls=1 en el receiver (ver ServiceBusSubscriberService).
  */
 @Global()
 @Module({
-  imports: [
-    RabbitMQModule.forRootAsync({
-      imports: [ConfigModule],
+  imports: [ConfigModule],
+  providers: [
+    {
+      provide: SERVICE_BUS_CLIENT,
       inject: [ConfigService],
-      useFactory: (config: ConfigService) => ({
-        uri: config.getOrThrow<string>('RABBITMQ_URL'),
-        // OrderEventsConsumer depende de que `order.cart.item_changed` (que escribe
-        // la proyección cart_lines) termine de procesarse ANTES que el siguiente
-        // `order.order.created` de la misma orden (que la lee para reservar stock).
-        // El default de la librería es prefetchCount=10: permite procesar varios
-        // mensajes en paralelo, lo que puede hacer que `order.order.created` se
-        // procese antes de que el insert anterior haya hecho commit, perdiendo la
-        // reserva en silencio. prefetchCount=1 fuerza orden estrictamente secuencial.
-        prefetchCount: 1,
-        exchanges: [
-          {
-            name: SHARED_EXCHANGE_NAME,
-            type: 'topic',
-            createExchangeIfNotExists: true,
-            options: { durable: true },
-          },
-        ],
-        // No bloquea el arranque si CloudAMQP tarda en responder; el
-        // connection-manager reintenta y reasienta colas/bindings al reconectar.
-        connectionInitOptions: { wait: false },
-      }),
-    }),
+      useFactory: (config: ConfigService): ServiceBusClient => {
+        const fqns = config.getOrThrow<string>(
+          'SERVICE_BUS_FULLY_QUALIFIED_NAMESPACE',
+        );
+        return new ServiceBusClient(fqns, new DefaultAzureCredential());
+      },
+    },
+    SharedEventPublisher,
   ],
-  providers: [SharedEventPublisher],
-  exports: [RabbitMQModule, SharedEventPublisher],
+  exports: [SERVICE_BUS_CLIENT, SharedEventPublisher],
 })
-export class SharedBusModule {}
+export class SharedBusModule implements OnApplicationShutdown {
+  constructor(
+    @Inject(SERVICE_BUS_CLIENT) private readonly client: ServiceBusClient,
+  ) {}
+
+  async onApplicationShutdown(): Promise<void> {
+    await this.client.close();
+  }
+}
