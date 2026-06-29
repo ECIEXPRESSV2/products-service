@@ -6,7 +6,7 @@ import {
 } from '@nestjs/terminus';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { Public } from '../../common/decorators/public.decorator';
-import { RabbitMQHealthIndicator } from './indicators/rabbitmq.health';
+import { ServiceBusHealthIndicator } from './indicators/service-bus.health';
 
 @ApiTags('Health')
 @Controller('health')
@@ -14,7 +14,7 @@ export class HealthController {
   constructor(
     private readonly healthCheckService: HealthCheckService,
     private readonly typeOrmIndicator: TypeOrmHealthIndicator,
-    private readonly rabbitMQIndicator: RabbitMQHealthIndicator,
+    private readonly serviceBusIndicator: ServiceBusHealthIndicator,
   ) {}
 
   @Get('live')
@@ -42,7 +42,7 @@ export class HealthController {
   readiness() {
     return this.healthCheckService.check([
       () => this.typeOrmIndicator.pingCheck('database'),
-      () => this.rabbitMQIndicator.check('rabbitmq'),
+      () => this.serviceBusIndicator.check('serviceBus'),
     ]);
   }
 

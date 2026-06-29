@@ -33,6 +33,6 @@ import { PromotionsModule } from '../promotions/promotions.module';
     StockReservationService,
     OrderEventsConsumer,
   ],
-  exports: [CartPricingService, ReturnsPricingService],
+  exports: [CartPricingService, ReturnsPricingService, OrderEventsConsumer],
 })
 export class CartModule {}

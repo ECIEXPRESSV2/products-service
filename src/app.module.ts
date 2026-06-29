@@ -13,6 +13,7 @@ import { CartModule } from './features/cart/cart.module';
 import { AuthModule } from './common/auth/auth.module';
 import { HealthModule } from './features/health/health.module';
 import { SharedBusModule } from './messaging/shared-bus/shared-bus.module';
+import { MessagingSubscriberModule } from './messaging/shared-bus/messaging-subscriber.module';
 
 @Module({
   imports: [
@@ -41,6 +42,7 @@ import { SharedBusModule } from './messaging/shared-bus/shared-bus.module';
     PromotionsModule,
     InventoryModule,
     CartModule,
+    MessagingSubscriberModule,
   ],
 })
 export class AppModule {}

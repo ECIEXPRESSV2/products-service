@@ -25,7 +25,8 @@
     "migration:create": "typeorm-ts-node-commonjs migration:create"
   },
   "dependencies": {
-    "@golevelup/nestjs-rabbitmq": "^9.0.2",
+    "@azure/identity": "^4.5.0",
+    "@azure/service-bus": "^7.9.5",
     "@nestjs/axios": "^4.0.0",
     "@nestjs/common": "^11.0.1",
     "@nestjs/config": "^4.0.4",
@@ -35,8 +36,6 @@
     "@nestjs/swagger": "^8.0.0",
     "@nestjs/terminus": "^11.0.0",
     "@nestjs/typeorm": "^11.0.1",
-    "amqp-connection-manager": "^5.0.0",
-    "amqplib": "^2.0.1",
     "axios": "^1.7.9",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.15.1",
@@ -55,7 +54,6 @@
     "@nestjs/cli": "^11.0.0",
     "@nestjs/schematics": "^11.0.0",
     "@nestjs/testing": "^11.0.1",
-    "@types/amqplib": "^0.10.8",
     "@types/express": "^5.0.0",
     "@types/jest": "^30.0.0",
     "@types/node": "^24.0.0",

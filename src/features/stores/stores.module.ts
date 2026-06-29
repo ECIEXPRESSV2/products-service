@@ -22,6 +22,11 @@ import { StoreValidator } from './services/store-validator';
     IdentityEventsConsumer,
     StoreValidator,
   ],
-  exports: [STORE_REPOSITORY, STORE_SYNC_SERVICE, StoreValidator],
+  exports: [
+    STORE_REPOSITORY,
+    STORE_SYNC_SERVICE,
+    StoreValidator,
+    IdentityEventsConsumer,
+  ],
 })
 export class StoresModule {}
