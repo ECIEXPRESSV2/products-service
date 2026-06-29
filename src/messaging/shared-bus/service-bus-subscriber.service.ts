@@ -15,7 +15,7 @@ import {
   SHARED_TOPIC_NAME,
   SHARED_SUBSCRIPTION_NAME,
 } from './shared-bus.config';
-import { SERVICE_BUS_CLIENT } from './shared-bus.module';
+import { SERVICE_BUS_CLIENT } from './service-bus.tokens';
 import { OrderEventsConsumer } from '../../features/cart/messaging/order-events.consumer';
 import { IdentityEventsConsumer } from '../../features/stores/messaging/identity-events.consumer';
 

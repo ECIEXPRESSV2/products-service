@@ -7,7 +7,7 @@ import {
 import { randomUUID } from 'node:crypto';
 import { ServiceBusClient, ServiceBusSender } from '@azure/service-bus';
 import { SHARED_TOPIC_NAME } from './shared-bus.config';
-import { SERVICE_BUS_CLIENT } from './shared-bus.module';
+import { SERVICE_BUS_CLIENT } from './service-bus.tokens';
 
 /**
  * Publica eventos de products-service sobre el topic compartido `eciexpress_events`

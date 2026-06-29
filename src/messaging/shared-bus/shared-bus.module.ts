@@ -7,13 +7,8 @@ import {
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { ServiceBusClient } from '@azure/service-bus';
 import { DefaultAzureCredential } from '@azure/identity';
+import { SERVICE_BUS_CLIENT } from './service-bus.tokens';
 import { SharedEventPublisher } from './shared-event-publisher.service';
-
-/**
- * Token de inyección del ServiceBusClient compartido (lo usan el publisher/sender y
- * el suscriptor/receiver).
- */
-export const SERVICE_BUS_CLIENT = Symbol('SERVICE_BUS_CLIENT');
 
 /**
  * Módulo global del bus de eventos compartido (Azure Service Bus). Crea un único
