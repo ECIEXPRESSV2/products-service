@@ -1,9 +1,10 @@
-import { Module } from '@nestjs/common';
+import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { WinstonModule } from 'nest-winston';
 import databaseConfig from './config/database.config';
 import { buildWinstonConfig } from './config/logger.config';
+import { LoggingMiddleware } from './common/logger/logging.middleware';
 import { CategoriesModule } from './features/categories/categories.module';
 import { ProductsModule } from './features/products/products.module';
 import { PromotionsModule } from './features/promotions/promotions.module';
@@ -45,4 +46,10 @@ import { MessagingSubscriberModule } from './messaging/shared-bus/messaging-subs
     MessagingSubscriberModule,
   ],
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+  configure(consumer: MiddlewareConsumer): void {
+    // Rellena el userId (header x-user-id) en el contexto de logging para que cada
+    // log enviado a Application Insights incluya customDimensions.userId.
+    consumer.apply(LoggingMiddleware).forRoutes('*');
+  }
+}

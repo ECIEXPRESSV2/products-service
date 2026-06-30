@@ -1,5 +1,6 @@
 import { utilities as nestWinstonModuleUtilities, WinstonModuleOptions } from 'nest-winston';
 import * as winston from 'winston';
+import { AppInsightsTransport } from '../common/logger/app-insights.winston-transport';
 
 export function buildWinstonConfig(appName = 'ProductsService'): WinstonModuleOptions {
   const isDev = process.env.NODE_ENV !== 'production';
@@ -46,6 +47,9 @@ export function buildWinstonConfig(appName = 'ProductsService'): WinstonModuleOp
         maxsize: 20 * 1024 * 1024, // 20 MB
         maxFiles: 10,
       }),
+      // Reenvía cada log a Application Insights con serviceName + userId.
+      // No-op si APPLICATIONINSIGHTS_CONNECTION_STRING no está presente (local).
+      new AppInsightsTransport({ level: process.env.LOG_LEVEL ?? 'debug' }),
     ],
     exitOnError: false,
   };
