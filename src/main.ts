@@ -3,6 +3,7 @@ import { ValidationPipe } from '@nestjs/common';
 import { WINSTON_MODULE_NEST_PROVIDER } from 'nest-winston';
 import { AppModule } from './app.module';
 import { setupSwagger } from './config/swagger.config';
+import { setupAppInsights } from './common/telemetry/app-insights';
 import { execSync, exec } from 'child_process';
 import * as fs from 'fs';
 import * as os from 'os';
@@ -74,9 +75,13 @@ process.on('SIGINT', () => {
 });
 
 async function bootstrap() {
+  // Inicializa Application Insights antes de crear la app para que el SDK pueda
+  // instrumentar HTTP/dependencias. No-op si no hay connection string (local).
+  setupAppInsights();
+
   const app = await NestFactory.create(AppModule, { bufferLogs: true });
 
-  // Use Winston as the NestJS logger
+  // Use Winston as the NestJS logger (con transporte a Application Insights).
   app.useLogger(app.get(WINSTON_MODULE_NEST_PROVIDER));
 
   // El frontend llama al catálogo directamente desde el navegador.
