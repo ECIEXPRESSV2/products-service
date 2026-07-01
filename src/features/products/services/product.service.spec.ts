@@ -87,6 +87,7 @@ describe('ProductService', () => {
       update: jest.fn(),
       setStock: jest.fn(),
       adjustReservedStock: jest.fn(),
+      tryReserveStock: jest.fn(),
       setStockAndReserved: jest.fn(),
       setActive: jest.fn(),
       softDelete: jest.fn(),
@@ -576,39 +577,41 @@ describe('ProductService', () => {
   // ── reserveStock ─────────────────────────────────────────────────────────
 
   describe('reserveStock', () => {
-    it('increases reservedStock when available stock is sufficient', async () => {
-      const product = makeProduct({ stock: 20, reservedStock: 5 });
-      repo.findById.mockResolvedValue(product);
-      repo.adjustReservedStock.mockResolvedValue(makeProduct({ stock: 20, reservedStock: 8 }));
+    it('reserves atomically when available stock is sufficient', async () => {
+      // La reserva atómica devuelve el producto YA actualizado (reservedStock = 8).
+      repo.tryReserveStock.mockResolvedValue(makeProduct({ stock: 20, reservedStock: 8 }));
 
       await service.reserveStock(PRODUCT_ID, 3, 'order-001');
 
-      expect(repo.adjustReservedStock).toHaveBeenCalledWith(PRODUCT_ID, 8);
+      expect(repo.tryReserveStock).toHaveBeenCalledWith(PRODUCT_ID, 3);
       expect(inventoryService.logMovement).toHaveBeenCalledWith(
         expect.objectContaining({
           productId: PRODUCT_ID,
           quantity: 3,
           stockBefore: 20,
           stockAfter: 20,
-          reservedStockBefore: 5,
+          reservedStockBefore: 5, // 8 (después) − 3 (reservado) = 5 (antes)
           reservedStockAfter: 8,
           referenceId: 'order-001',
         }),
       );
     });
 
-    it('throws ConflictException when available stock is insufficient', async () => {
-      // stock=10, reservedStock=8 → available=2, requesting 5
+    it('throws ConflictException when the atomic reservation cannot be applied', async () => {
+      // El UPDATE condicional no afectó filas (no había disponible suficiente).
+      repo.tryReserveStock.mockResolvedValue(null);
+      // Se reconsulta solo para el mensaje: stock=10, reservedStock=8 → available=2.
       repo.findById.mockResolvedValue(makeProduct({ stock: 10, reservedStock: 8 }));
 
       await expect(service.reserveStock(PRODUCT_ID, 5, 'order-001')).rejects.toThrow(ConflictException);
-      expect(repo.adjustReservedStock).not.toHaveBeenCalled();
+      expect(inventoryService.logMovement).not.toHaveBeenCalled();
     });
 
-    it('throws NotFoundException when product does not exist', async () => {
+    it('throws ConflictException when product does not exist', async () => {
+      repo.tryReserveStock.mockResolvedValue(null);
       repo.findById.mockResolvedValue(null);
 
-      await expect(service.reserveStock(PRODUCT_ID, 1, 'order-001')).rejects.toThrow(NotFoundException);
+      await expect(service.reserveStock(PRODUCT_ID, 1, 'order-001')).rejects.toThrow(ConflictException);
     });
   });
 

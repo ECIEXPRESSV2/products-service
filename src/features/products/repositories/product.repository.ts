@@ -171,6 +171,27 @@ export class ProductRepository implements IProductRepository {
     return this.orm.findOne({ where: { id }, relations: { category: true } });
   }
 
+  /**
+   * Reserva ACID en un ÚNICO UPDATE condicional: `reserved_stock = reserved_stock + qty`
+   * pero solo cuando `stock - reserved_stock >= qty`. La condición y el incremento ocurren
+   * en la misma sentencia, así que la base de datos serializa dos reservas concurrentes sobre
+   * la misma fila: la primera bloquea la fila y confirma; la segunda re-evalúa el WHERE contra
+   * la fila YA actualizada y afecta 0 filas. Resultado: ante la última unidad y dos pedidos
+   * simultáneos, solo el más rápido reserva — nunca hay sobreventa.
+   */
+  async tryReserveStock(id: string, quantity: number): Promise<Product | null> {
+    const result = await this.orm
+      .createQueryBuilder()
+      .update(Product)
+      .set({ reservedStock: () => 'reserved_stock + :qtyAdd' })
+      .where('id = :id', { id })
+      .andWhere('stock - reserved_stock >= :qtyNeed')
+      .setParameters({ qtyAdd: quantity, qtyNeed: quantity })
+      .execute();
+    if ((result.affected ?? 0) === 0) return null;
+    return this.orm.findOne({ where: { id }, relations: { category: true } });
+  }
+
   async setStockAndReserved(id: string, newStock: number, newReservedStock: number): Promise<Product | null> {
     const result = await this.orm.update(id, { stock: newStock, reservedStock: newReservedStock });
     if ((result.affected ?? 0) === 0) return null;

@@ -285,24 +285,30 @@ export class ProductService implements IProductService {
 
   async reserveStock(productId: string, quantity: number, orderId: string): Promise<void> {
     this.logger.log(`Reserving ${quantity} units product=${productId} order=${orderId}`, ProductService.name);
-    const product = await this.findById(productId);
-    const available = product.stock - product.reservedStock;
-    if (available < quantity) {
+    // Reserva ATÓMICA y condicional (no leer-y-luego-escribir): la comprobación de
+    // disponibilidad y el incremento van en el mismo UPDATE, garantía ACID contra sobreventa
+    // cuando dos pedidos compiten por las últimas unidades.
+    const reserved = await this.productRepository.tryReserveStock(productId, quantity);
+    if (!reserved) {
+      // No se pudo reservar: no había disponible suficiente (o el producto no existe).
+      // Reconsultamos solo para construir un mensaje de error claro.
+      const current = await this.findById(productId).catch(() => null);
+      const available = current ? Math.max(0, current.stock - current.reservedStock) : 0;
       throw new ConflictException(
         `Stock disponible insuficiente. Disponible: ${available}, requerido: ${quantity}`,
       );
     }
-    const newReserved = product.reservedStock + quantity;
-    await this.productRepository.adjustReservedStock(productId, newReserved);
     await this.inventoryService.logMovement({
       productId,
-      storeId: product.storeId,
+      storeId: reserved.storeId,
       type: MovementType.RESERVATION,
       quantity,
-      stockBefore: product.stock,
-      stockAfter: product.stock,
-      reservedStockBefore: product.reservedStock,
-      reservedStockAfter: newReserved,
+      stockBefore: reserved.stock,
+      stockAfter: reserved.stock,
+      // Tomamos los valores del producto ya actualizado para que el log sea exacto aun bajo
+      // concurrencia (reserved_stock anterior = actual − lo que acabamos de reservar).
+      reservedStockBefore: reserved.reservedStock - quantity,
+      reservedStockAfter: reserved.reservedStock,
       referenceId: orderId,
     });
   }
