@@ -68,6 +68,7 @@ describe('CategoryService', () => {
       update: jest.fn(),
       setStock: jest.fn(),
       adjustReservedStock: jest.fn(),
+      tryReserveStock: jest.fn(),
       setStockAndReserved: jest.fn(),
       setActive: jest.fn(),
       softDelete: jest.fn(),
