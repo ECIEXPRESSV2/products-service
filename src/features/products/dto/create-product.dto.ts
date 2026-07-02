@@ -99,6 +99,7 @@ export class CreateProductDto {
   @IsInt()
   @Min(0)
   @IsOptional()
+  @Type(() => Number)
   stock?: number;
 
   @ApiPropertyOptional({
@@ -110,6 +111,7 @@ export class CreateProductDto {
   @IsInt()
   @Min(0)
   @IsOptional()
+  @Type(() => Number)
   minStock?: number;
 
   @ApiPropertyOptional({
@@ -130,5 +132,6 @@ export class CreateProductDto {
   @IsInt()
   @Min(0)
   @IsOptional()
+  @Type(() => Number)
   sortOrder?: number;
 }

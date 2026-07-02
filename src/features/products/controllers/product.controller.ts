@@ -12,10 +12,13 @@ import {
   Patch,
   Post,
   Query,
+  UploadedFiles,
+  UseInterceptors,
 } from '@nestjs/common';
 import {
   ApiBadRequestResponse,
   ApiBearerAuth,
+  ApiConsumes,
   ApiConflictResponse,
   ApiCreatedResponse,
   ApiForbiddenResponse,
@@ -28,6 +31,8 @@ import {
   ApiTags,
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
+import { FileFieldsInterceptor } from '@nestjs/platform-express';
+import { memoryStorage } from 'multer';
 import type { IProductService } from '../services/product.service.interface';
 import { PRODUCT_SERVICE } from '../services/product.service.interface';
 import { CreateProductDto } from '../dto/create-product.dto';
@@ -40,6 +45,7 @@ import { ProductWithPricingDto } from '../dto/product-with-pricing.dto';
 import { RequireRoles } from '../../../common/decorators/require-roles.decorator';
 import { CurrentUser } from '../../../common/decorators/current-user.decorator';
 import type { AuthenticatedUser } from '../../../common/guards/gateway-auth.guard';
+import type { ProductImageFiles } from '../product-assets.types';
 
 const STORE_ID_EXAMPLE = 'f47ac10b-58cc-4372-a567-0e02b2c3d479';
 const PRODUCT_ID_EXAMPLE = 'b2cc188e-9bf9-4888-aa12-ace4e6543111';
@@ -189,6 +195,34 @@ export class ProductController {
     @CurrentUser() user?: AuthenticatedUser,
   ): Promise<Product> {
     return this.productService.create(dto, user?.userId);
+  }
+
+  @Post('with-assets')
+  @RequireRoles('VENDOR', 'ADMIN')
+  @UseInterceptors(
+    FileFieldsInterceptor(
+      [
+        { name: 'front', maxCount: 1 },
+        { name: 'left', maxCount: 1 },
+        { name: 'back', maxCount: 1 },
+      ],
+      { storage: memoryStorage() },
+    ),
+  )
+  @ApiConsumes('multipart/form-data')
+  @ApiOperation({
+    summary: 'Crear un producto con 3 imágenes obligatorias y disparar la generación 3D',
+    description:
+      'Crea el producto y procesa en segundo plano las imágenes frontal, lateral y trasera para generar el modelo 3D.',
+  })
+  @ApiCreatedResponse({ description: 'Producto creado y procesado en segundo plano', type: Product })
+  @ApiBadRequestResponse({ description: 'Datos de entrada inválidos o imágenes faltantes' })
+  createWithAssets(
+    @Body() dto: CreateProductDto,
+    @UploadedFiles() files: ProductImageFiles,
+    @CurrentUser() user?: AuthenticatedUser,
+  ): Promise<Product> {
+    return this.productService.createWithAssets(dto, files, user?.userId);
   }
 
   @Patch(':id')

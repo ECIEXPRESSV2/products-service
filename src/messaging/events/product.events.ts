@@ -4,6 +4,8 @@ export const PRODUCT_EVENTS = {
   DELETED: 'product.item.deleted',
 } as const;
 
+export type ProductGenerationStatus = 'PENDING' | 'PROCESSING' | 'READY' | 'FAILED';
+
 export interface ProductCreatedPayload {
   id: string;
   storeId: string;
@@ -13,6 +15,14 @@ export interface ProductCreatedPayload {
   price: string;
   sku: string | null;
   stock: number;
+  imageUrl?: string | null;
+  frontImageUrl?: string | null;
+  leftImageUrl?: string | null;
+  backImageUrl?: string | null;
+  model3dUrl?: string | null;
+  modelGenerationStatus?: ProductGenerationStatus;
+  modelGenerationProgress?: number | null;
+  modelGenerationError?: string | null;
 }
 
 export interface ProductUpdatedPayload {
@@ -25,6 +35,14 @@ export interface ProductUpdatedPayload {
   sku?: string;
   stock?: number;
   isActive?: boolean;
+  imageUrl?: string | null;
+  frontImageUrl?: string | null;
+  leftImageUrl?: string | null;
+  backImageUrl?: string | null;
+  model3dUrl?: string | null;
+  modelGenerationStatus?: ProductGenerationStatus;
+  modelGenerationProgress?: number | null;
+  modelGenerationError?: string | null;
 }
 
 export interface ProductDeletedPayload {

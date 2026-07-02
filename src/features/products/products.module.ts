@@ -15,6 +15,7 @@ import { Category } from '../categories/entities/category.entity';
 import { InventoryModule } from '../inventory/inventory.module';
 import { StoresModule } from '../stores/stores.module';
 import { PromotionsModule } from '../promotions/promotions.module';
+import { ProductMediaService } from './services/product-media.service';
 
 @Module({
   imports: [
@@ -29,6 +30,7 @@ import { PromotionsModule } from '../promotions/promotions.module';
   providers: [
     // El publisher viaja por el bus compartido (SharedEventPublisher, global).
     ProductPublisher,
+    ProductMediaService,
     { provide: PRODUCT_REPOSITORY, useClass: ProductRepository },
     { provide: PRODUCT_SERVICE, useClass: ProductService },
     // CategoryRepository se necesita en ProductService para validar pertenencia a la tienda.
