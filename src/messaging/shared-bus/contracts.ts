@@ -35,6 +35,13 @@ export const PUBLISHED_PRODUCT_EVENTS = {
   LOW_STOCK: 'product.inventory.low_stock',
   /** Una reserva de stock para una línea de orden fue rechazada por falta de inventario (CU-05). */
   RESERVATION_REJECTED: 'product.inventory.reservation_rejected',
+  /**
+   * Se reservó stock EXITOSAMENTE para TODAS las líneas de la orden. orders-service lo
+   * usa para confirmar los pedidos en efectivo: recién con el stock realmente reservado
+   * un pedido en efectivo pasa a CONFIRMED (evita que dos compradores por la última
+   * unidad vean ambos "confirmado").
+   */
+  RESERVATION_CONFIRMED: 'product.inventory.reservation_confirmed',
 } as const;
 
 // ─── Payloads consumidos (campos que usamos del envelope de orders) ─────────
@@ -128,4 +135,9 @@ export interface ReservationRejectedPayload {
   requestedQuantity: number;
   availableQuantity: number;
   reason: string;
+}
+
+export interface ReservationConfirmedPayload {
+  orderId: string;
+  storeId: string;
 }
