@@ -4,8 +4,8 @@ import { Repository } from 'typeorm';
 import { Product } from '../entities/product.entity';
 import { IProductRepository } from './product.repository.interface';
 import { CreateProductDto } from '../dto/create-product.dto';
-import { UpdateProductDto } from '../dto/update-product.dto';
 import { PaginatedProductResult } from '../dto/paginated-result.dto';
+import { ProductGenerationStatus } from '../product-generation-status';
 
 /**
  * Nombre de la tabla de la réplica local de Store (`features/stores/entities/store.entity.ts`).
@@ -131,6 +131,13 @@ export class ProductRepository implements IProductRepository {
       price: String(dto.price),
       sku: dto.sku ?? null,
       imageUrl: dto.imageUrl ?? null,
+      frontImageUrl: null,
+      leftImageUrl: null,
+      backImageUrl: null,
+      model3dUrl: null,
+      modelGenerationStatus: ProductGenerationStatus.PENDING,
+      modelGenerationProgress: 0,
+      modelGenerationError: null,
       stock: dto.stock ?? 0,
       minStock: dto.minStock ?? 0,
       isActive: dto.isActive ?? true,
@@ -139,23 +146,41 @@ export class ProductRepository implements IProductRepository {
     return this.orm.save(product);
   }
 
-  async update(id: string, dto: UpdateProductDto): Promise<Product | null> {
+  private readValue<T>(source: Record<string, unknown>, key: string): T | undefined {
+    return source[key] as T | undefined;
+  }
+
+  private buildUpdatePatch(existing: Product, dto: Record<string, unknown>): Partial<Product> {
+    return {
+      categoryId: this.readValue<string>(dto, 'categoryId') ?? existing.categoryId,
+      name: this.readValue<string>(dto, 'name') ?? existing.name,
+      slug: this.readValue<string>(dto, 'slug') ?? existing.slug,
+      description: this.readValue<string | null>(dto, 'description') ?? existing.description,
+      price: (() => {
+        const value = this.readValue<number | string>(dto, 'price');
+        return value === undefined ? existing.price : String(value);
+      })(),
+      sku: this.readValue<string | null>(dto, 'sku') ?? existing.sku,
+      imageUrl: this.readValue<string>(dto, 'frontImageUrl') ?? this.readValue<string>(dto, 'imageUrl') ?? existing.imageUrl,
+      frontImageUrl: this.readValue<string>(dto, 'frontImageUrl') ?? existing.frontImageUrl,
+      leftImageUrl: this.readValue<string>(dto, 'leftImageUrl') ?? existing.leftImageUrl,
+      backImageUrl: this.readValue<string>(dto, 'backImageUrl') ?? existing.backImageUrl,
+      model3dUrl: this.readValue<string>(dto, 'model3dUrl') ?? existing.model3dUrl,
+      modelGenerationStatus:
+        this.readValue<ProductGenerationStatus>(dto, 'modelGenerationStatus') ?? existing.modelGenerationStatus,
+      modelGenerationProgress: this.readValue<number>(dto, 'modelGenerationProgress') ?? existing.modelGenerationProgress,
+      modelGenerationError: this.readValue<string | null>(dto, 'modelGenerationError') ?? existing.modelGenerationError,
+      stock: this.readValue<number>(dto, 'stock') ?? existing.stock,
+      minStock: this.readValue<number>(dto, 'minStock') ?? existing.minStock,
+      isActive: this.readValue<boolean>(dto, 'isActive') ?? existing.isActive,
+      sortOrder: this.readValue<number>(dto, 'sortOrder') ?? existing.sortOrder,
+    };
+  }
+
+  async update(id: string, dto: Record<string, unknown>): Promise<Product | null> {
     const existing = await this.orm.findOne({ where: { id } });
     if (!existing) return null;
-
-    const updated = this.orm.merge(existing, {
-      ...(dto.categoryId !== undefined && { categoryId: dto.categoryId }),
-      ...(dto.name !== undefined && { name: dto.name }),
-      ...(dto.slug !== undefined && { slug: dto.slug }),
-      ...(dto.description !== undefined && { description: dto.description }),
-      ...(dto.price !== undefined && { price: String(dto.price) }),
-      ...(dto.sku !== undefined && { sku: dto.sku }),
-      ...(dto.imageUrl !== undefined && { imageUrl: dto.imageUrl }),
-      ...(dto.stock !== undefined && { stock: dto.stock }),
-      ...(dto.minStock !== undefined && { minStock: dto.minStock }),
-      ...(dto.isActive !== undefined && { isActive: dto.isActive }),
-      ...(dto.sortOrder !== undefined && { sortOrder: dto.sortOrder }),
-    });
+    const updated = this.orm.merge(existing, this.buildUpdatePatch(existing, dto));
     return this.orm.save(updated);
   }
 

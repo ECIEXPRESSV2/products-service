@@ -18,6 +18,8 @@ import { INVENTORY_SERVICE } from '../../inventory/services/inventory.service.in
 import { SharedEventPublisher } from '../../../messaging/shared-bus/shared-event-publisher.service';
 import type { IPromotionService } from '../../promotions/services/promotion.service.interface';
 import { PROMOTION_SERVICE } from '../../promotions/services/promotion.service.interface';
+import { ProductMediaService } from './product-media.service';
+import { ProductGenerationStatus } from '../product-generation-status';
 
 const STORE_ID = 'f47ac10b-58cc-4372-a567-0e02b2c3d479';
 const PRODUCT_ID = 'b2cc188e-9bf9-4888-aa12-ace4e6543111';
@@ -53,6 +55,13 @@ function makeProduct(overrides: Partial<Product> = {}): Product {
     price: '3500.00',
     sku: null,
     imageUrl: null,
+    frontImageUrl: null,
+    leftImageUrl: null,
+    backImageUrl: null,
+    model3dUrl: null,
+    modelGenerationStatus: ProductGenerationStatus.PENDING,
+    modelGenerationProgress: 0,
+    modelGenerationError: null,
     stock: 20,
     reservedStock: 0,
     minStock: 5,
@@ -71,6 +80,7 @@ describe('ProductService', () => {
   let publisher: jest.Mocked<ProductPublisher>;
   let auditService: jest.Mocked<AuditService>;
   let inventoryService: jest.Mocked<IInventoryService>;
+  let productMediaService: jest.Mocked<ProductMediaService>;
 
   beforeEach(async () => {
     const repoMock: jest.Mocked<IProductRepository> = {
@@ -84,6 +94,7 @@ describe('ProductService', () => {
       findBySlugAndStore: jest.fn(),
       findBySkuAndStore: jest.fn(),
       create: jest.fn(),
+      createWithAssets: jest.fn(),
       update: jest.fn(),
       setStock: jest.fn(),
       tryReserveStock: jest.fn(),
@@ -155,6 +166,13 @@ describe('ProductService', () => {
       }),
     };
 
+    const productMediaServiceMock = {
+      validateImages: jest.fn(),
+      uploadProductImage: jest.fn(),
+      uploadProductImages: jest.fn(),
+      generateAndUploadModel3d: jest.fn(),
+    } as unknown as jest.Mocked<ProductMediaService>;
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         ProductService,
@@ -166,6 +184,7 @@ describe('ProductService', () => {
         { provide: INVENTORY_SERVICE, useValue: inventoryMock },
         { provide: SharedEventPublisher, useValue: sharedEventPublisherMock },
         { provide: PROMOTION_SERVICE, useValue: promotionServiceMock },
+        { provide: ProductMediaService, useValue: productMediaServiceMock },
         { provide: WINSTON_MODULE_NEST_PROVIDER, useValue: loggerMock },
       ],
     }).compile();
@@ -176,6 +195,7 @@ describe('ProductService', () => {
     publisher = publisherMock;
     auditService = auditMock;
     inventoryService = inventoryMock;
+    productMediaService = productMediaServiceMock;
   });
 
   // ── findAll / findAllPaginated ───────────────────────────────────────────
