@@ -45,8 +45,12 @@ function makeQueryBuilderMock(overrides: Partial<Record<string, jest.Mock>> = {}
     take: jest.fn().mockReturnThis(),
     getMany: jest.fn().mockResolvedValue([]),
     getManyAndCount: jest.fn().mockResolvedValue([[], 0]),
+    update: jest.fn().mockReturnThis(),
+    set: jest.fn().mockReturnThis(),
+    setParameters: jest.fn().mockReturnThis(),
+    execute: jest.fn().mockResolvedValue({ affected: 0 }),
     ...overrides,
-  } as unknown as jest.Mocked<SelectQueryBuilder<Product>>;
+  } as unknown as jest.Mocked<SelectQueryBuilder<Product>> & { set: jest.Mock };
   return qb;
 }
 
@@ -394,6 +398,95 @@ describe('ProductRepository', () => {
 
       expect(result).toBeNull();
       expect(orm.findOne).not.toHaveBeenCalled();
+    });
+  });
+
+  // ── confirmSale ──────────────────────────────────────────────────────────
+  // Confirmación de venta ACID: descuenta stock y reserved_stock en un ÚNICO UPDATE
+  // condicional (WHERE stock >= qty), nunca lee-y-luego-escribe.
+
+  describe('confirmSale', () => {
+    it('issues a single conditional UPDATE guarded by stock >= quantity', async () => {
+      const qb = makeQueryBuilderMock({ execute: jest.fn().mockResolvedValue({ affected: 1 }) });
+      orm.createQueryBuilder.mockReturnValue(qb as unknown as SelectQueryBuilder<Product>);
+      const product = makeProduct({ stock: 17, reservedStock: 2 });
+      orm.findOne.mockResolvedValue(product);
+
+      const result = await repository.confirmSale(PRODUCT_ID, 3);
+
+      expect(qb.update).toHaveBeenCalledWith(Product);
+      expect(qb.set).toHaveBeenCalledWith({
+        stock: expect.any(Function),
+        reservedStock: expect.any(Function),
+      });
+      expect(qb.where).toHaveBeenCalledWith('id = :id', { id: PRODUCT_ID });
+      expect(qb.andWhere).toHaveBeenCalledWith('stock >= :qtyGuard');
+      expect(qb.setParameters).toHaveBeenCalledWith({ qtyStock: 3, qtyReserved: 3, qtyGuard: 3 });
+      expect(result).toBe(product);
+    });
+
+    it('returns null (no overselling) when the conditional UPDATE affects 0 rows', async () => {
+      const qb = makeQueryBuilderMock({ execute: jest.fn().mockResolvedValue({ affected: 0 }) });
+      orm.createQueryBuilder.mockReturnValue(qb as unknown as SelectQueryBuilder<Product>);
+
+      const result = await repository.confirmSale(PRODUCT_ID, 5);
+
+      expect(result).toBeNull();
+      expect(orm.findOne).not.toHaveBeenCalled();
+    });
+  });
+
+  // ── releaseReservation ───────────────────────────────────────────────────
+
+  describe('releaseReservation', () => {
+    it('issues a single UPDATE that clamps reserved_stock at 0', async () => {
+      const qb = makeQueryBuilderMock({ execute: jest.fn().mockResolvedValue({ affected: 1 }) });
+      orm.createQueryBuilder.mockReturnValue(qb as unknown as SelectQueryBuilder<Product>);
+      const product = makeProduct({ reservedStock: 0 });
+      orm.findOne.mockResolvedValue(product);
+
+      const result = await repository.releaseReservation(PRODUCT_ID, 10);
+
+      expect(qb.set).toHaveBeenCalledWith({ reservedStock: expect.any(Function) });
+      expect(qb.where).toHaveBeenCalledWith('id = :id', { id: PRODUCT_ID });
+      expect(qb.setParameters).toHaveBeenCalledWith({ qty: 10 });
+      expect(result).toBe(product);
+    });
+
+    it('returns null when the product does not exist', async () => {
+      const qb = makeQueryBuilderMock({ execute: jest.fn().mockResolvedValue({ affected: 0 }) });
+      orm.createQueryBuilder.mockReturnValue(qb as unknown as SelectQueryBuilder<Product>);
+
+      const result = await repository.releaseReservation('non-existent', 1);
+
+      expect(result).toBeNull();
+    });
+  });
+
+  // ── incrementStock ───────────────────────────────────────────────────────
+
+  describe('incrementStock', () => {
+    it('issues a single UPDATE that adds to stock', async () => {
+      const qb = makeQueryBuilderMock({ execute: jest.fn().mockResolvedValue({ affected: 1 }) });
+      orm.createQueryBuilder.mockReturnValue(qb as unknown as SelectQueryBuilder<Product>);
+      const product = makeProduct({ stock: 23 });
+      orm.findOne.mockResolvedValue(product);
+
+      const result = await repository.incrementStock(PRODUCT_ID, 3);
+
+      expect(qb.set).toHaveBeenCalledWith({ stock: expect.any(Function) });
+      expect(qb.where).toHaveBeenCalledWith('id = :id', { id: PRODUCT_ID });
+      expect(qb.setParameters).toHaveBeenCalledWith({ qty: 3 });
+      expect(result).toBe(product);
+    });
+
+    it('returns null when the product does not exist', async () => {
+      const qb = makeQueryBuilderMock({ execute: jest.fn().mockResolvedValue({ affected: 0 }) });
+      orm.createQueryBuilder.mockReturnValue(qb as unknown as SelectQueryBuilder<Product>);
+
+      const result = await repository.incrementStock('non-existent', 1);
+
+      expect(result).toBeNull();
     });
   });
 

@@ -315,18 +315,22 @@ export class ProductService implements IProductService {
 
   async releaseStock(productId: string, quantity: number, orderId: string): Promise<void> {
     this.logger.log(`Releasing ${quantity} units product=${productId} order=${orderId}`, ProductService.name);
-    const product = await this.findById(productId);
-    const newReserved = Math.max(0, product.reservedStock - quantity);
-    await this.productRepository.adjustReservedStock(productId, newReserved);
+    // UPDATE atómico (mismo patrón que tryReserveStock/confirmSale): reserved_stock se
+    // recalcula en la propia sentencia SQL, no en JS a partir de una lectura previa, así dos
+    // liberaciones concurrentes del mismo producto no se pisan entre sí (lost update).
+    const updated = await this.productRepository.releaseReservation(productId, quantity);
+    if (!updated) {
+      throw new NotFoundException(`Producto con id "${productId}" no encontrado`);
+    }
     await this.inventoryService.logMovement({
       productId,
-      storeId: product.storeId,
+      storeId: updated.storeId,
       type: MovementType.RELEASE,
       quantity,
-      stockBefore: product.stock,
-      stockAfter: product.stock,
-      reservedStockBefore: product.reservedStock,
-      reservedStockAfter: newReserved,
+      stockBefore: updated.stock,
+      stockAfter: updated.stock,
+      reservedStockBefore: updated.reservedStock + quantity,
+      reservedStockAfter: updated.reservedStock,
       referenceId: orderId,
     });
   }
@@ -338,47 +342,53 @@ export class ProductService implements IProductService {
    */
   async restoreStock(productId: string, quantity: number, orderId: string): Promise<void> {
     this.logger.log(`Restoring ${quantity} units product=${productId} order=${orderId}`, ProductService.name);
-    const product = await this.findById(productId);
-    const newStock = product.stock + quantity;
-    await this.productRepository.setStock(productId, newStock);
+    // UPDATE atómico: stock = stock + quantity en la propia sentencia SQL, para que dos
+    // restituciones concurrentes del mismo producto no se pisen entre sí (lost update).
+    const updated = await this.productRepository.incrementStock(productId, quantity);
+    if (!updated) {
+      throw new NotFoundException(`Producto con id "${productId}" no encontrado`);
+    }
     await this.inventoryService.logMovement({
       productId,
-      storeId: product.storeId,
+      storeId: updated.storeId,
       type: MovementType.RETURN,
       quantity,
-      stockBefore: product.stock,
-      stockAfter: newStock,
-      reservedStockBefore: product.reservedStock,
-      reservedStockAfter: product.reservedStock,
+      stockBefore: updated.stock - quantity,
+      stockAfter: updated.stock,
+      reservedStockBefore: updated.reservedStock,
+      reservedStockAfter: updated.reservedStock,
       referenceId: orderId,
     });
   }
 
   async confirmReservation(productId: string, quantity: number, orderId: string): Promise<void> {
     this.logger.log(`Confirming reservation ${quantity} units product=${productId} order=${orderId}`, ProductService.name);
-    const product = await this.findById(productId);
-    const newStock = product.stock - quantity;
-    if (newStock < 0) {
+    // UPDATE atómico y condicional (mismo patrón que tryReserveStock): descuenta stock y
+    // reserved_stock en UNA sola sentencia SQL, solo si stock >= quantity en ese instante.
+    // Reemplaza el antiguo SELECT + resta en JS + UPDATE incondicional, que bajo concurrencia
+    // permitía que dos confirmaciones leyeran el mismo stock y ambas escribieran el mismo
+    // resultado (lost update) — la causa de la sobreventa cuando dos pedidos confirman a la
+    // vez sobre la última unidad. Con el UPDATE condicional, la segunda confirmación
+    // re-evalúa el WHERE contra el stock YA descontado por la primera y falla si no alcanza.
+    const updated = await this.productRepository.confirmSale(productId, quantity);
+    if (!updated) {
+      const current = await this.findById(productId); // lanza NotFoundException si no existe
       throw new ConflictException(
-        `Stock insuficiente para confirmar la venta. Stock: ${product.stock}, cantidad: ${quantity}`,
+        `Stock insuficiente para confirmar la venta. Stock: ${current.stock}, cantidad: ${quantity}`,
       );
     }
-    const newReserved = Math.max(0, product.reservedStock - quantity);
-    const updated = await this.productRepository.setStockAndReserved(productId, newStock, newReserved);
     await this.inventoryService.logMovement({
       productId,
-      storeId: product.storeId,
+      storeId: updated.storeId,
       type: MovementType.SALE,
       quantity,
-      stockBefore: product.stock,
-      stockAfter: newStock,
-      reservedStockBefore: product.reservedStock,
-      reservedStockAfter: newReserved,
+      stockBefore: updated.stock + quantity,
+      stockAfter: updated.stock,
+      reservedStockBefore: updated.reservedStock + quantity,
+      reservedStockAfter: updated.reservedStock,
       referenceId: orderId,
     });
-    if (updated) {
-      await this.checkAndPublishLowStock(updated);
-    }
+    await this.checkAndPublishLowStock(updated);
   }
 
   async remove(id: string, performedBy?: string): Promise<void> {

@@ -165,12 +165,6 @@ export class ProductRepository implements IProductRepository {
     return this.orm.findOne({ where: { id }, relations: { category: true } });
   }
 
-  async adjustReservedStock(id: string, newReservedStock: number): Promise<Product | null> {
-    const result = await this.orm.update(id, { reservedStock: newReservedStock });
-    if ((result.affected ?? 0) === 0) return null;
-    return this.orm.findOne({ where: { id }, relations: { category: true } });
-  }
-
   /**
    * Reserva ACID en un ÚNICO UPDATE condicional: `reserved_stock = reserved_stock + qty`
    * pero solo cuando `stock - reserved_stock >= qty`. La condición y el incremento ocurren
@@ -192,8 +186,61 @@ export class ProductRepository implements IProductRepository {
     return this.orm.findOne({ where: { id }, relations: { category: true } });
   }
 
-  async setStockAndReserved(id: string, newStock: number, newReservedStock: number): Promise<Product | null> {
-    const result = await this.orm.update(id, { stock: newStock, reservedStock: newReservedStock });
+  /**
+   * Confirmación de venta ACID en un ÚNICO UPDATE condicional: descuenta `stock` y
+   * `reserved_stock` en la misma sentencia, pero solo cuando `stock >= quantity`. Reemplaza
+   * el patrón leer-y-luego-escribir (SELECT stock, restar en JS, UPDATE incondicional) que,
+   * bajo concurrencia, permite que dos confirmaciones lean el mismo `stock` y ambas escriban
+   * el mismo resultado (lost update) — la causa de sobreventa cuando dos pedidos confirman a
+   * la vez sobre la última unidad. Mismo mecanismo que `tryReserveStock`: la condición y el
+   * decremento van en la misma sentencia, así la base de datos serializa las escrituras
+   * concurrentes sobre la fila y la segunda confirmación re-evalúa el WHERE contra el stock
+   * YA descontado por la primera.
+   */
+  async confirmSale(id: string, quantity: number): Promise<Product | null> {
+    const result = await this.orm
+      .createQueryBuilder()
+      .update(Product)
+      .set({
+        stock: () => 'stock - :qtyStock',
+        reservedStock: () => 'GREATEST(reserved_stock - :qtyReserved, 0)',
+      })
+      .where('id = :id', { id })
+      .andWhere('stock >= :qtyGuard')
+      .setParameters({ qtyStock: quantity, qtyReserved: quantity, qtyGuard: quantity })
+      .execute();
+    if ((result.affected ?? 0) === 0) return null;
+    return this.orm.findOne({ where: { id }, relations: { category: true } });
+  }
+
+  /**
+   * Libera una reserva no consumida en un ÚNICO UPDATE atómico:
+   * `reserved_stock = GREATEST(reserved_stock - quantity, 0)`, sin leer-y-luego-escribir.
+   */
+  async releaseReservation(id: string, quantity: number): Promise<Product | null> {
+    const result = await this.orm
+      .createQueryBuilder()
+      .update(Product)
+      .set({ reservedStock: () => 'GREATEST(reserved_stock - :qty, 0)' })
+      .where('id = :id', { id })
+      .setParameters({ qty: quantity })
+      .execute();
+    if ((result.affected ?? 0) === 0) return null;
+    return this.orm.findOne({ where: { id }, relations: { category: true } });
+  }
+
+  /**
+   * Restituye stock físico tras cancelar una venta ya confirmada, en un ÚNICO UPDATE
+   * atómico: `stock = stock + quantity`, sin leer-y-luego-escribir.
+   */
+  async incrementStock(id: string, quantity: number): Promise<Product | null> {
+    const result = await this.orm
+      .createQueryBuilder()
+      .update(Product)
+      .set({ stock: () => 'stock + :qty' })
+      .where('id = :id', { id })
+      .setParameters({ qty: quantity })
+      .execute();
     if ((result.affected ?? 0) === 0) return null;
     return this.orm.findOne({ where: { id }, relations: { category: true } });
   }
