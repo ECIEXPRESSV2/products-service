@@ -4,6 +4,7 @@ import { UpdateProductDto } from '../dto/update-product.dto';
 import { AdjustStockDto } from '../dto/adjust-stock.dto';
 import { PaginatedProductResult } from '../dto/paginated-result.dto';
 import { ProductWithPricingDto } from '../dto/product-with-pricing.dto';
+import type { ProductImageFiles } from '../product-assets.types';
 
 /**
  * ISP: contrato mínimo que el controlador necesita; no expone detalles de infraestructura.
@@ -19,6 +20,7 @@ export interface IProductService {
   search(storeId: string, query: string): Promise<Product[]>;
   findById(id: string): Promise<Product>;
   create(dto: CreateProductDto, performedBy?: string): Promise<Product>;
+  createWithAssets(dto: CreateProductDto, files: ProductImageFiles, performedBy?: string): Promise<Product>;
   update(id: string, dto: UpdateProductDto, performedBy?: string): Promise<Product>;
   activate(id: string): Promise<Product>;
   deactivate(id: string): Promise<Product>;

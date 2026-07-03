@@ -60,6 +60,48 @@ export class CreateProductsTable1749859200000 implements MigrationInterface {
             isNullable: true,
           },
           {
+            name: 'front_image_url',
+            type: 'varchar',
+            length: '500',
+            isNullable: true,
+          },
+          {
+            name: 'left_image_url',
+            type: 'varchar',
+            length: '500',
+            isNullable: true,
+          },
+          {
+            name: 'back_image_url',
+            type: 'varchar',
+            length: '500',
+            isNullable: true,
+          },
+          {
+            name: 'model_3d_url',
+            type: 'varchar',
+            length: '500',
+            isNullable: true,
+          },
+          {
+            name: 'model_generation_status',
+            type: 'varchar',
+            length: '20',
+            default: "'PENDING'",
+            isNullable: false,
+          },
+          {
+            name: 'model_generation_progress',
+            type: 'int',
+            default: 0,
+            isNullable: false,
+          },
+          {
+            name: 'model_generation_error',
+            type: 'text',
+            isNullable: true,
+          },
+          {
             name: 'stock',
             type: 'int',
             default: 0,

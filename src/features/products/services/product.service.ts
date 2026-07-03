@@ -23,6 +23,9 @@ import { PUBLISHED_PRODUCT_EVENTS } from '../../../messaging/shared-bus/contract
 import type { IPromotionService } from '../../promotions/services/promotion.service.interface';
 import { PROMOTION_SERVICE } from '../../promotions/services/promotion.service.interface';
 import { ProductWithPricingDto } from '../dto/product-with-pricing.dto';
+import { ProductMediaService } from './product-media.service';
+import { ProductGenerationStatus } from '../product-generation-status';
+import type { ProductImageFiles, ProductImageSet } from '../product-assets.types';
 
 @Injectable()
 export class ProductService implements IProductService {
@@ -39,6 +42,7 @@ export class ProductService implements IProductService {
     private readonly sharedEventPublisher: SharedEventPublisher,
     @Inject(PROMOTION_SERVICE)
     private readonly promotionService: IPromotionService,
+    private readonly productMediaService: ProductMediaService,
     @Inject(WINSTON_MODULE_NEST_PROVIDER)
     private readonly logger: LoggerService,
   ) {}
@@ -62,7 +66,7 @@ export class ProductService implements IProductService {
           storeId,
           product.id,
           product.categoryId,
-          parseFloat(product.price),
+          Number.parseFloat(product.price),
         );
         return Object.assign(new ProductWithPricingDto(), product, {
           effectivePrice: pricing.effectivePrice,
@@ -107,6 +111,19 @@ export class ProductService implements IProductService {
   }
 
   async create(dto: CreateProductDto, performedBy?: string): Promise<Product> {
+    return this.createInternal(dto, performedBy);
+  }
+
+  async createWithAssets(dto: CreateProductDto, files: ProductImageFiles, performedBy?: string): Promise<Product> {
+    const imageSet = this.productMediaService.validateImages(files);
+    return this.createInternal(dto, performedBy, imageSet);
+  }
+
+  private async createInternal(
+    dto: CreateProductDto,
+    performedBy?: string,
+    files?: ProductImageSet,
+  ): Promise<Product> {
     this.logger.log(
       `Creating product slug="${dto.slug}" store=${dto.storeId}`,
       ProductService.name,
@@ -118,29 +135,141 @@ export class ProductService implements IProductService {
     if (dto.sku) await this.assertSkuIsUnique(dto.sku, dto.storeId);
 
     const product = await this.productRepository.create(dto);
+    let savedProduct = product;
 
-    this.logger.log(`Product created id=${product.id}`, ProductService.name);
+    if (files) {
+      const processing = await this.productRepository.update(product.id, {
+        modelGenerationStatus: ProductGenerationStatus.PROCESSING,
+        modelGenerationProgress: 0,
+        modelGenerationError: null,
+      } as any);
+      if (!processing) {
+        throw new NotFoundException(`Producto con id "${product.id}" no encontrado`);
+      }
+      savedProduct = processing;
+      void this.processProductAssets(savedProduct.id, files, performedBy).catch((error) => {
+        this.logger.error(
+          `Error procesando imágenes/modelo 3D del producto ${savedProduct.id}: ${(error as Error).message}`,
+          ProductService.name,
+        );
+      });
+    }
+
+    this.logger.log(`Product created id=${savedProduct.id}`, ProductService.name);
 
     await this.auditService.log({
       entityName: 'Product',
-      entityId: product.id,
+      entityId: savedProduct.id,
       action: AuditAction.CREATE,
-      afterData: this.toAuditData(product),
+      afterData: this.toAuditData(savedProduct),
       performedBy,
     });
 
     this.publisher.productCreated({
-      id: product.id,
-      storeId: product.storeId,
-      categoryId: product.categoryId,
-      name: product.name,
-      slug: product.slug,
-      price: product.price,
-      sku: product.sku,
-      stock: product.stock,
+      id: savedProduct.id,
+      storeId: savedProduct.storeId,
+      categoryId: savedProduct.categoryId,
+      name: savedProduct.name,
+      slug: savedProduct.slug,
+      price: savedProduct.price,
+      sku: savedProduct.sku,
+      stock: savedProduct.stock,
+      imageUrl: savedProduct.imageUrl,
+      frontImageUrl: savedProduct.frontImageUrl,
+      leftImageUrl: savedProduct.leftImageUrl,
+      backImageUrl: savedProduct.backImageUrl,
+      model3dUrl: savedProduct.model3dUrl,
+      modelGenerationStatus: savedProduct.modelGenerationStatus,
+      modelGenerationProgress: savedProduct.modelGenerationProgress,
+      modelGenerationError: savedProduct.modelGenerationError,
     });
 
-    return product;
+    return savedProduct;
+  }
+
+  private async processProductAssets(productId: string, files: ProductImageSet, performedBy?: string): Promise<void> {
+    const before = await this.findById(productId);
+
+    try {
+      await this.productRepository.update(productId, { modelGenerationProgress: 10 } as any);
+      const frontImageUrl = await this.productMediaService.uploadProductImage(productId, 'front', files.front);
+      await this.productRepository.update(productId, {
+        imageUrl: frontImageUrl,
+        frontImageUrl,
+        modelGenerationProgress: 35,
+      } as any);
+
+      const leftImageUrl = await this.productMediaService.uploadProductImage(productId, 'left', files.left);
+      await this.productRepository.update(productId, {
+        leftImageUrl,
+        modelGenerationProgress: 55,
+      } as any);
+
+      const backImageUrl = await this.productMediaService.uploadProductImage(productId, 'back', files.back);
+      await this.productRepository.update(productId, {
+        backImageUrl,
+        modelGenerationProgress: 70,
+      } as any);
+
+      const model3dUrl = await this.productMediaService.generateAndUploadModel3d(productId, files);
+
+      const updated = await this.productRepository.update(productId, {
+        imageUrl: frontImageUrl,
+        frontImageUrl,
+        leftImageUrl,
+        backImageUrl,
+        model3dUrl,
+        modelGenerationStatus: ProductGenerationStatus.READY,
+        modelGenerationProgress: 100,
+        modelGenerationError: null,
+      } as any);
+
+      if (!updated) {
+        throw new NotFoundException(`Producto con id "${productId}" no encontrado`);
+      }
+
+      await this.auditService.log({
+        entityName: 'Product',
+        entityId: productId,
+        action: AuditAction.UPDATE,
+        beforeData: this.toAuditData(before),
+        afterData: this.toAuditData(updated),
+        performedBy,
+      });
+
+      this.publisher.productUpdated({
+        id: productId,
+        storeId: updated.storeId,
+        imageUrl: updated.imageUrl,
+        frontImageUrl: updated.frontImageUrl,
+        leftImageUrl: updated.leftImageUrl,
+        backImageUrl: updated.backImageUrl,
+        model3dUrl: updated.model3dUrl,
+        modelGenerationStatus: updated.modelGenerationStatus,
+        modelGenerationProgress: updated.modelGenerationProgress,
+        modelGenerationError: updated.modelGenerationError,
+      });
+      return;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Error desconocido';
+      const failed = await this.productRepository.update(productId, {
+        modelGenerationStatus: ProductGenerationStatus.FAILED,
+        modelGenerationProgress: 100,
+        modelGenerationError: message,
+      } as any);
+
+      if (failed) {
+        this.publisher.productUpdated({
+          id: productId,
+          storeId: failed.storeId,
+          modelGenerationStatus: failed.modelGenerationStatus,
+          modelGenerationProgress: failed.modelGenerationProgress,
+          modelGenerationError: failed.modelGenerationError,
+        });
+      }
+
+      throw error;
+    }
   }
 
   async update(id: string, dto: UpdateProductDto, performedBy?: string): Promise<Product> {
@@ -482,6 +611,14 @@ export class ProductService implements IProductService {
       price: product.price,
       sku: product.sku,
       stock: product.stock,
+      imageUrl: product.imageUrl,
+      frontImageUrl: product.frontImageUrl,
+      leftImageUrl: product.leftImageUrl,
+      backImageUrl: product.backImageUrl,
+      model3dUrl: product.model3dUrl,
+      modelGenerationStatus: product.modelGenerationStatus,
+      modelGenerationProgress: product.modelGenerationProgress,
+      modelGenerationError: product.modelGenerationError,
       isActive: product.isActive,
       sortOrder: product.sortOrder,
     };

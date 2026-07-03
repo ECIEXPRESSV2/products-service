@@ -10,6 +10,23 @@ import { DefaultAzureCredential } from '@azure/identity';
 import { SERVICE_BUS_CLIENT } from './service-bus.tokens';
 import { SharedEventPublisher } from './shared-event-publisher.service';
 
+function createNoopServiceBusClient(): ServiceBusClient {
+  const noopSender = {
+    sendMessages: async () => undefined,
+    close: async () => undefined,
+  };
+  const noopReceiver = {
+    subscribe: () => undefined,
+    close: async () => undefined,
+  };
+
+  return {
+    createSender: () => noopSender,
+    createReceiver: () => noopReceiver,
+    close: async () => undefined,
+  } as unknown as ServiceBusClient;
+}
+
 /**
  * Módulo global del bus de eventos compartido (Azure Service Bus). Crea un único
  * `ServiceBusClient` autenticado con Managed Identity (DefaultAzureCredential) contra
@@ -30,10 +47,9 @@ import { SharedEventPublisher } from './shared-event-publisher.service';
       useFactory: (config: ConfigService): ServiceBusClient => {
         const connStr = process.env.SERVICE_BUS_CONNECTION_STRING;
         if (connStr) return new ServiceBusClient(connStr);
-        const fqns = config.getOrThrow<string>(
-          'SERVICE_BUS_FULLY_QUALIFIED_NAMESPACE',
-        );
-        return new ServiceBusClient(fqns, new DefaultAzureCredential());
+        const fqns = config.get<string>('SERVICE_BUS_FULLY_QUALIFIED_NAMESPACE');
+        if (fqns) return new ServiceBusClient(fqns, new DefaultAzureCredential());
+        return createNoopServiceBusClient();
       },
     },
     SharedEventPublisher,

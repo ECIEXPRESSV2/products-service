@@ -10,6 +10,7 @@ import {
 } from 'typeorm';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Category } from '../../categories/entities/category.entity';
+import { ProductGenerationStatus } from '../product-generation-status';
 
 @Entity('products')
 @Index('IDX_products_store_active', ['storeId', 'isActive'])
@@ -88,6 +89,68 @@ export class Product {
   })
   @Column({ name: 'image_url', type: 'varchar', length: 500, nullable: true })
   imageUrl: string | null;
+
+  @ApiPropertyOptional({
+    example: 'https://cdn.example.com/products/cafe/front.jpg',
+    description: 'URL de la imagen frontal del producto',
+    maxLength: 500,
+    nullable: true,
+  })
+  @Column({ name: 'front_image_url', type: 'varchar', length: 500, nullable: true })
+  frontImageUrl: string | null;
+
+  @ApiPropertyOptional({
+    example: 'https://cdn.example.com/products/cafe/left.jpg',
+    description: 'URL de la imagen lateral del producto',
+    maxLength: 500,
+    nullable: true,
+  })
+  @Column({ name: 'left_image_url', type: 'varchar', length: 500, nullable: true })
+  leftImageUrl: string | null;
+
+  @ApiPropertyOptional({
+    example: 'https://cdn.example.com/products/cafe/back.jpg',
+    description: 'URL de la imagen trasera del producto',
+    maxLength: 500,
+    nullable: true,
+  })
+  @Column({ name: 'back_image_url', type: 'varchar', length: 500, nullable: true })
+  backImageUrl: string | null;
+
+  @ApiPropertyOptional({
+    example: 'https://cdn.example.com/products/cafe/model.glb',
+    description: 'URL del modelo 3D generado para el producto',
+    maxLength: 500,
+    nullable: true,
+  })
+  @Column({ name: 'model_3d_url', type: 'varchar', length: 500, nullable: true })
+  model3dUrl: string | null;
+
+  @ApiPropertyOptional({
+    example: ProductGenerationStatus.PROCESSING,
+    enum: ProductGenerationStatus,
+    description: 'Estado del proceso de generación 3D',
+  })
+  @Column({ name: 'model_generation_status', type: 'varchar', length: 20, default: ProductGenerationStatus.PENDING })
+  modelGenerationStatus: ProductGenerationStatus;
+
+  @ApiPropertyOptional({
+    example: 45,
+    description: 'Porcentaje de progreso del proceso 3D',
+    minimum: 0,
+    maximum: 100,
+    nullable: true,
+  })
+  @Column({ name: 'model_generation_progress', type: 'int', default: 0 })
+  modelGenerationProgress: number;
+
+  @ApiPropertyOptional({
+    example: 'La IA no respondió a tiempo',
+    description: 'Último error del proceso de generación 3D',
+    nullable: true,
+  })
+  @Column({ name: 'model_generation_error', type: 'text', nullable: true })
+  modelGenerationError: string | null;
 
   @ApiProperty({ example: 50, description: 'Unidades disponibles en inventario (stock físico total)', minimum: 0 })
   @Column({ type: 'int', default: 0 })

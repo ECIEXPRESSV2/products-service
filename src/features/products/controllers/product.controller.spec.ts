@@ -7,6 +7,7 @@ import { Category } from '../../categories/entities/category.entity';
 import { CreateProductDto } from '../dto/create-product.dto';
 import { StockOperation } from '../dto/adjust-stock.dto';
 import { PaginatedProductResult } from '../dto/paginated-result.dto';
+import { ProductGenerationStatus } from '../product-generation-status';
 
 const STORE_ID = 'f47ac10b-58cc-4372-a567-0e02b2c3d479';
 const PRODUCT_ID = 'b2cc188e-9bf9-4888-aa12-ace4e6543111';
@@ -42,6 +43,13 @@ function makeProduct(overrides: Partial<Product> = {}): Product {
     price: '3500.00',
     sku: null,
     imageUrl: null,
+    frontImageUrl: null,
+    leftImageUrl: null,
+    backImageUrl: null,
+    model3dUrl: null,
+    modelGenerationStatus: ProductGenerationStatus.PENDING,
+    modelGenerationProgress: 0,
+    modelGenerationError: null,
     stock: 20,
     reservedStock: 0,
     minStock: 5,
@@ -72,6 +80,7 @@ describe('ProductController', () => {
       search: jest.fn(),
       findById: jest.fn(),
       create: jest.fn(),
+      createWithAssets: jest.fn(),
       update: jest.fn(),
       activate: jest.fn(),
       deactivate: jest.fn(),

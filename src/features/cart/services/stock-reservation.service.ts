@@ -48,6 +48,15 @@ export class StockReservationService {
     let reservedCount = 0;
     let anyRejected = false;
     for (const line of cart.lines) {
+      // Idempotencia ante entrega duplicada de order.created (bus at-least-once): si la
+      // línea YA fue reservada, no la reservamos otra vez. Sin esto, una reentrega
+      // duplicaría `reserved_stock` o —si el stock ya se agotó entre ambas entregas—
+      // emitiría un `reservation_rejected` espurio para un pedido ya reservado, dejándolo
+      // en un estado contradictorio (reservado + rechazado) que corrompe el inventario.
+      if (line.stockReserved) {
+        reservedCount += 1;
+        continue;
+      }
       try {
         await this.products.reserveStock(line.productId, line.quantity, orderId);
         // Solo se marca tras éxito: si esta línea falla, releaseForOrder no debe tocarla
@@ -123,6 +132,12 @@ export class StockReservationService {
         } else {
           await this.products.releaseStock(line.productId, line.quantity, orderId);
         }
+        // Idempotencia ante entrega duplicada de order.cancelled (bus at-least-once):
+        // marca la línea como NO reservada tras liberar/restituir. `restoreStock`/
+        // `releaseStock` no son idempotentes (`stock += qty`), así que sin esto un segundo
+        // order.cancelled restituiría el stock OTRA VEZ (el bug de "el stock queda el doble"
+        // al cancelar). Con la línea ya en false, el segundo evento no toca el inventario.
+        await this.carts.markLineReserved(orderId, line.productId, false);
       } catch (error) {
         this.logger.error(
           `No se pudo ${action} stock producto=${line.productId} order=${orderId}: ${(error as Error).message}`,
