@@ -19,6 +19,7 @@ export interface IProductService {
   findLowStock(storeId: string): Promise<Product[]>;
   search(storeId: string, query: string): Promise<Product[]>;
   findById(id: string): Promise<Product>;
+  findByIdRaw(id: string): Promise<Product>;
   create(dto: CreateProductDto, performedBy?: string): Promise<Product>;
   createWithAssets(dto: CreateProductDto, files: ProductImageFiles, performedBy?: string): Promise<Product>;
   update(id: string, dto: UpdateProductDto, performedBy?: string): Promise<Product>;
