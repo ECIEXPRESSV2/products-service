@@ -14,6 +14,9 @@ import {
   Query,
   UploadedFiles,
   UseInterceptors,
+  Res,
+  BadGatewayException,
+  NotFoundException,
 } from '@nestjs/common';
 import {
   ApiBadRequestResponse,
@@ -32,7 +35,11 @@ import {
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
 import { FileFieldsInterceptor } from '@nestjs/platform-express';
+import { Public } from '../../../common/decorators/public.decorator';
 import { memoryStorage } from 'multer';
+import { pipeline } from 'node:stream/promises';
+import type { Response } from 'express';
+import axios from 'axios';
 import type { IProductService } from '../services/product.service.interface';
 import { PRODUCT_SERVICE } from '../services/product.service.interface';
 import { CreateProductDto } from '../dto/create-product.dto';
@@ -49,6 +56,7 @@ import type { ProductImageFiles } from '../product-assets.types';
 
 const STORE_ID_EXAMPLE = 'f47ac10b-58cc-4372-a567-0e02b2c3d479';
 const PRODUCT_ID_EXAMPLE = 'b2cc188e-9bf9-4888-aa12-ace4e6543111';
+const MAX_PRODUCT_ASSET_FILE_SIZE_BYTES = 10 * 1024 * 1024;
 
 @ApiTags('Products')
 @ApiBearerAuth()
@@ -176,6 +184,47 @@ export class ProductController {
     return this.productService.findById(id);
   }
 
+  @Get(':id/model3d')
+  @Public()
+  @ApiOperation({
+    summary: 'Proxy público del modelo 3D de un producto',
+    description:
+      'Recupera el GLB asociado al producto y lo sirve desde products-service para evitar bloqueos CORS del navegador al cargar el visor 3D.',
+  })
+  @ApiParam({ name: 'id', type: String, format: 'uuid', example: PRODUCT_ID_EXAMPLE })
+  @ApiOkResponse({ description: 'Modelo 3D servido correctamente' })
+  @ApiNotFoundResponse({ description: 'Producto o modelo no encontrado' })
+  @ApiBadRequestResponse({ description: 'id no es un UUID válido' })
+  async streamModel3d(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<void> {
+    const product = await this.productService.findByIdRaw(id);
+    const modelUrl = product.model3dUrl;
+
+    if (!modelUrl) {
+      throw new NotFoundException('El producto no tiene un modelo 3D disponible');
+    }
+
+    let upstream;
+    try {
+      upstream = await axios.get(modelUrl, {
+        responseType: 'stream',
+        validateStatus: (status) => status >= 200 && status < 300,
+      });
+    } catch {
+      throw new BadGatewayException('No se pudo obtener el modelo 3D');
+    }
+
+    res.setHeader('Content-Type', upstream.headers['content-type'] ?? 'model/gltf-binary');
+    if (upstream.headers['content-length']) {
+      res.setHeader('Content-Length', upstream.headers['content-length']);
+    }
+    res.setHeader('Cache-Control', 'public, max-age=300');
+
+    await pipeline(upstream.data, res);
+  }
+
   // ── Mutaciones ───────────────────────────────────────────────────────────
 
   @Post()
@@ -206,7 +255,7 @@ export class ProductController {
         { name: 'left', maxCount: 1 },
         { name: 'back', maxCount: 1 },
       ],
-      { storage: memoryStorage() },
+      { storage: memoryStorage(), limits: { fileSize: MAX_PRODUCT_ASSET_FILE_SIZE_BYTES } },
     ),
   )
   @ApiConsumes('multipart/form-data')

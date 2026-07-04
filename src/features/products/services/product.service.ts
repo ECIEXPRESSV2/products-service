@@ -625,7 +625,7 @@ export class ProductService implements IProductService {
     };
   }
 
-  private async findByIdRaw(id: string): Promise<Product> {
+  async findByIdRaw(id: string): Promise<Product> {
     const product = await this.productRepository.findById(id);
     if (!product) {
       this.logger.warn(`Product not found: ${id}`, ProductService.name);
