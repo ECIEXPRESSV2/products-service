@@ -637,12 +637,19 @@ export class ProductService implements IProductService {
   private makeMediaAccessible<T extends Product | Product[]>(value: T): T {
     const products = Array.isArray(value) ? value : [value];
     for (const product of products) {
-      product.imageUrl = this.productMediaService.toAccessibleUrl(product.imageUrl);
-      product.frontImageUrl = this.productMediaService.toAccessibleUrl(product.frontImageUrl);
-      product.leftImageUrl = this.productMediaService.toAccessibleUrl(product.leftImageUrl);
-      product.backImageUrl = this.productMediaService.toAccessibleUrl(product.backImageUrl);
-      product.model3dUrl = this.productMediaService.toAccessibleUrl(product.model3dUrl);
+      product.imageUrl = this.resolveAccessibleUrl(product.imageUrl);
+      product.frontImageUrl = this.resolveAccessibleUrl(product.frontImageUrl);
+      product.leftImageUrl = this.resolveAccessibleUrl(product.leftImageUrl);
+      product.backImageUrl = this.resolveAccessibleUrl(product.backImageUrl);
+      product.model3dUrl = this.resolveAccessibleUrl(product.model3dUrl);
     }
     return value;
+  }
+
+  private resolveAccessibleUrl(rawUrl: string | null | undefined): string | null {
+    const signer = this.productMediaService as unknown as {
+      toAccessibleUrl?: (url: string | null | undefined) => string | null;
+    };
+    return signer.toAccessibleUrl?.(rawUrl) ?? rawUrl ?? null;
   }
 }
