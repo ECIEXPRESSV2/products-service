@@ -262,11 +262,18 @@ export class ProductMediaService {
     const response = await axios.post(this.aiGenerateUrl, payload, {
       headers: { 'Content-Type': 'application/json' },
       timeout: this.aiTimeoutMs,
-      responseType: 'json',
+      responseType: 'arraybuffer',
       validateStatus: (status) => status >= 200 && status < 300,
     });
 
-    const artifact = this.resolveGeneratedArtifact(response.data);
-    return this.uploadModelArtifact(productId, artifact);
+    // response.data es ya un arraybuffer, conviertelo a Buffer
+    const glbBuffer = Buffer.from(response.data);
+
+    return this.uploadBuffer(
+      `models/${productId}/product-model.glb`,
+      glbBuffer,
+      'model/gltf-binary',
+      this.getModelContainerClient(),
+    );
   }
 }
