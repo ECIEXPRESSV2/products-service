@@ -49,7 +49,7 @@ export class ProductService implements IProductService {
 
   findAll(storeId: string, includeInactive = false): Promise<Product[]> {
     this.logger.log(`Listing products for store ${storeId}`, ProductService.name);
-    return this.productRepository.findAll(storeId, includeInactive);
+    return this.productRepository.findAll(storeId, includeInactive).then((products) => this.makeMediaAccessible(products));
   }
 
   /**
@@ -78,36 +78,37 @@ export class ProductService implements IProductService {
 
   findAllPaginated(storeId: string, page: number, limit: number, includeInactive = false): Promise<PaginatedProductResult> {
     this.logger.log(`Listing products paginated store=${storeId} page=${page}`, ProductService.name);
-    return this.productRepository.findAllPaginated(storeId, page, limit, includeInactive);
+    return this.productRepository.findAllPaginated(storeId, page, limit, includeInactive).then((result) => {
+      result.data = this.makeMediaAccessible(result.data);
+      return result;
+    });
   }
 
   findByCategory(storeId: string, categoryId: string, includeInactive = false): Promise<Product[]> {
     this.logger.log(`Listing products store=${storeId} category=${categoryId}`, ProductService.name);
-    return this.productRepository.findByCategory(storeId, categoryId, includeInactive);
+    return this.productRepository.findByCategory(storeId, categoryId, includeInactive).then((products) => this.makeMediaAccessible(products));
   }
 
   findByCategoryPaginated(storeId: string, categoryId: string, page: number, limit: number, includeInactive = false): Promise<PaginatedProductResult> {
     this.logger.log(`Listing products paginated store=${storeId} category=${categoryId} page=${page}`, ProductService.name);
-    return this.productRepository.findByCategoryPaginated(storeId, categoryId, page, limit, includeInactive);
+    return this.productRepository.findByCategoryPaginated(storeId, categoryId, page, limit, includeInactive).then((result) => {
+      result.data = this.makeMediaAccessible(result.data);
+      return result;
+    });
   }
 
   findLowStock(storeId: string): Promise<Product[]> {
     this.logger.log(`Listing low-stock products for store ${storeId}`, ProductService.name);
-    return this.productRepository.findLowStock(storeId);
+    return this.productRepository.findLowStock(storeId).then((products) => this.makeMediaAccessible(products));
   }
 
   search(storeId: string, query: string): Promise<Product[]> {
     this.logger.log(`Searching products query="${query}" store=${storeId}`, ProductService.name);
-    return this.productRepository.search(storeId, query);
+    return this.productRepository.search(storeId, query).then((products) => this.makeMediaAccessible(products));
   }
 
   async findById(id: string): Promise<Product> {
-    const product = await this.productRepository.findById(id);
-    if (!product) {
-      this.logger.warn(`Product not found: ${id}`, ProductService.name);
-      throw new NotFoundException(`Producto con id "${id}" no encontrado`);
-    }
-    return product;
+    return this.findByIdRaw(id).then((product) => this.makeMediaAccessible(product));
   }
 
   async create(dto: CreateProductDto, performedBy?: string): Promise<Product> {
@@ -184,11 +185,11 @@ export class ProductService implements IProductService {
       modelGenerationError: savedProduct.modelGenerationError,
     });
 
-    return savedProduct;
+    return this.makeMediaAccessible(savedProduct);
   }
 
   private async processProductAssets(productId: string, files: ProductImageSet, performedBy?: string): Promise<void> {
-    const before = await this.findById(productId);
+    const before = await this.findByIdRaw(productId);
 
     try {
       await this.productRepository.update(productId, { modelGenerationProgress: 10 } as any);
@@ -274,7 +275,7 @@ export class ProductService implements IProductService {
 
   async update(id: string, dto: UpdateProductDto, performedBy?: string): Promise<Product> {
     this.logger.log(`Updating product id=${id}`, ProductService.name);
-    const before = await this.findById(id);
+    const before = await this.findByIdRaw(id);
 
     const targetStoreId = dto.storeId ?? before.storeId;
 
@@ -305,13 +306,13 @@ export class ProductService implements IProductService {
     });
 
     this.publisher.productUpdated({ id, storeId: updated.storeId, ...dto });
-    return updated;
+    return this.makeMediaAccessible(updated);
   }
 
   async activate(id: string): Promise<Product> {
     this.logger.log(`Activating product id=${id}`, ProductService.name);
-    const before = await this.findById(id);
-    if (before.isActive) return before;
+    const before = await this.findByIdRaw(id);
+    if (before.isActive) return this.makeMediaAccessible(before);
 
     const updated = await this.productRepository.setActive(id, true);
     if (!updated) throw new NotFoundException(`Producto con id "${id}" no encontrado`);
@@ -325,13 +326,13 @@ export class ProductService implements IProductService {
     });
 
     this.publisher.productUpdated({ id, storeId: updated.storeId, isActive: true });
-    return updated;
+    return this.makeMediaAccessible(updated);
   }
 
   async deactivate(id: string): Promise<Product> {
     this.logger.log(`Deactivating product id=${id}`, ProductService.name);
-    const before = await this.findById(id);
-    if (!before.isActive) return before;
+    const before = await this.findByIdRaw(id);
+    if (!before.isActive) return this.makeMediaAccessible(before);
 
     const updated = await this.productRepository.setActive(id, false);
     if (!updated) throw new NotFoundException(`Producto con id "${id}" no encontrado`);
@@ -345,7 +346,7 @@ export class ProductService implements IProductService {
     });
 
     this.publisher.productUpdated({ id, storeId: updated.storeId, isActive: false });
-    return updated;
+    return this.makeMediaAccessible(updated);
   }
 
   async adjustStock(id: string, dto: AdjustStockDto): Promise<Product> {
@@ -353,7 +354,7 @@ export class ProductService implements IProductService {
       `Adjusting stock id=${id} op=${dto.operation} qty=${dto.quantity}`,
       ProductService.name,
     );
-    const product = await this.findById(id);
+    const product = await this.findByIdRaw(id);
 
     let newStock: number;
     let movementType: MovementType;
@@ -409,7 +410,7 @@ export class ProductService implements IProductService {
 
     this.publisher.productUpdated({ id, storeId: updated.storeId, stock: newStock });
     await this.checkAndPublishLowStock(updated);
-    return updated;
+    return this.makeMediaAccessible(updated);
   }
 
   async reserveStock(productId: string, quantity: number, orderId: string): Promise<void> {
@@ -421,7 +422,7 @@ export class ProductService implements IProductService {
     if (!reserved) {
       // No se pudo reservar: no había disponible suficiente (o el producto no existe).
       // Reconsultamos solo para construir un mensaje de error claro.
-      const current = await this.findById(productId).catch(() => null);
+      const current = await this.findByIdRaw(productId).catch(() => null);
       const available = current ? Math.max(0, current.stock - current.reservedStock) : 0;
       throw new ConflictException(
         `Stock disponible insuficiente. Disponible: ${available}, requerido: ${quantity}`,
@@ -501,7 +502,7 @@ export class ProductService implements IProductService {
     // re-evalúa el WHERE contra el stock YA descontado por la primera y falla si no alcanza.
     const updated = await this.productRepository.confirmSale(productId, quantity);
     if (!updated) {
-      const current = await this.findById(productId); // lanza NotFoundException si no existe
+      const current = await this.findByIdRaw(productId); // lanza NotFoundException si no existe
       throw new ConflictException(
         `Stock insuficiente para confirmar la venta. Stock: ${current.stock}, cantidad: ${quantity}`,
       );
@@ -522,7 +523,7 @@ export class ProductService implements IProductService {
 
   async remove(id: string, performedBy?: string): Promise<void> {
     this.logger.log(`Removing product id=${id}`, ProductService.name);
-    const product = await this.findById(id);
+    const product = await this.findByIdRaw(id);
 
     await this.productRepository.softDelete(id);
 
@@ -622,5 +623,26 @@ export class ProductService implements IProductService {
       isActive: product.isActive,
       sortOrder: product.sortOrder,
     };
+  }
+
+  private async findByIdRaw(id: string): Promise<Product> {
+    const product = await this.productRepository.findById(id);
+    if (!product) {
+      this.logger.warn(`Product not found: ${id}`, ProductService.name);
+      throw new NotFoundException(`Producto con id "${id}" no encontrado`);
+    }
+    return product;
+  }
+
+  private makeMediaAccessible<T extends Product | Product[]>(value: T): T {
+    const products = Array.isArray(value) ? value : [value];
+    for (const product of products) {
+      product.imageUrl = this.productMediaService.toAccessibleUrl(product.imageUrl);
+      product.frontImageUrl = this.productMediaService.toAccessibleUrl(product.frontImageUrl);
+      product.leftImageUrl = this.productMediaService.toAccessibleUrl(product.leftImageUrl);
+      product.backImageUrl = this.productMediaService.toAccessibleUrl(product.backImageUrl);
+      product.model3dUrl = this.productMediaService.toAccessibleUrl(product.model3dUrl);
+    }
+    return value;
   }
 }
