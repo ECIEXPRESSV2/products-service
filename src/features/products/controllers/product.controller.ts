@@ -62,7 +62,7 @@ const MAX_PRODUCT_ASSET_FILE_SIZE_BYTES = 10 * 1024 * 1024;
 @ApiBearerAuth()
 @ApiUnauthorizedResponse({ description: 'Token ausente o inválido' })
 @ApiForbiddenResponse({ description: 'Rol sin permiso para esta operación' })
-@Controller('products')
+@Controller('')
 export class ProductController {
   constructor(
     @Inject(PRODUCT_SERVICE)
