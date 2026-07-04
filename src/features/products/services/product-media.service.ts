@@ -1,6 +1,11 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { BlobServiceClient } from '@azure/storage-blob';
+import {
+  BlobSASPermissions,
+  BlobServiceClient,
+  StorageSharedKeyCredential,
+  generateBlobSASQueryParameters,
+} from '@azure/storage-blob';
 import axios from 'axios';
 import { extname } from 'node:path';
 import type { GeneratedModelArtifact, ProductImageFile, ProductImageFiles, ProductImageSet, ProductImageVariant } from '../product-assets.types';
@@ -39,6 +44,14 @@ export class ProductMediaService {
       throw new Error('BLOB_CONNECTION_STRING no está configurada');
     }
     return BlobServiceClient.fromConnectionString(this.connectionString);
+  }
+
+  private get sharedKeyCredential(): StorageSharedKeyCredential {
+    const match = /(?:^|;)AccountName=([^;]+);(?:.*?;)AccountKey=([^;]+)/i.exec(this.connectionString);
+    if (!match) {
+      throw new Error('BLOB_CONNECTION_STRING no contiene AccountName/AccountKey válidos');
+    }
+    return new StorageSharedKeyCredential(match[1], match[2]);
   }
 
   private async getContainerClient() {
@@ -96,6 +109,49 @@ export class ProductMediaService {
       blobHTTPHeaders: { blobContentType: contentType },
     });
     return blobClient.url;
+  }
+
+  private isBlobStorageUrl(rawUrl: string): boolean {
+    try {
+      const parsed = new URL(rawUrl);
+      return parsed.protocol === 'https:' && parsed.hostname.endsWith('.blob.core.windows.net');
+    } catch {
+      return false;
+    }
+  }
+
+  toAccessibleUrl(rawUrl: string | null | undefined, expiresInHours = 168): string | null {
+    if (!rawUrl) return null;
+    if (!this.isBlobStorageUrl(rawUrl)) return rawUrl;
+
+    try {
+      const parsed = new URL(rawUrl);
+      if (parsed.searchParams.has('sig')) {
+        return rawUrl;
+      }
+
+      const pathParts = parsed.pathname.split('/').filter(Boolean);
+      const [containerName, ...blobParts] = pathParts;
+      if (!containerName || blobParts.length === 0) {
+        return rawUrl;
+      }
+
+      const blobName = decodeURIComponent(blobParts.join('/'));
+      const sas = generateBlobSASQueryParameters(
+        {
+          containerName,
+          blobName,
+          permissions: BlobSASPermissions.parse('r'),
+          startsOn: new Date(Date.now() - 5 * 60 * 1000),
+          expiresOn: new Date(Date.now() + expiresInHours * 60 * 60 * 1000),
+        },
+        this.sharedKeyCredential,
+      ).toString();
+
+      return `${parsed.origin}${parsed.pathname}?${sas}`;
+    } catch {
+      return rawUrl;
+    }
   }
 
   async uploadProductImage(
