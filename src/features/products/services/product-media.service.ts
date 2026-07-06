@@ -21,12 +21,11 @@ export class ProductMediaService {
     return value.trim();
   }
 
+  // Contenedor ÚNICO para imágenes y modelos de producto. Distribución de rutas:
+  //   products/<productId>/images/<front|left|back>.<ext>
+  //   products/<productId>/models/model.glb
   private get containerName(): string {
-    return (this.configService.get<string>('blob.productImagesContainer') ?? process.env.BLOB_PRODUCTS_CONTAINER ?? 'product-images').trim();
-  }
-
-  private get modelContainerName(): string {
-    return (this.configService.get<string>('blob.productModelsContainer') ?? process.env.BLOB_PRODUCT_MODELS_CONTAINER ?? 'product-models').trim();
+    return (this.configService.get<string>('blob.productsContainer') ?? process.env.BLOB_PRODUCTS_CONTAINER ?? 'products').trim();
   }
 
   private get aiGenerateUrl(): string {
@@ -56,13 +55,8 @@ export class ProductMediaService {
 
   private async getContainerClient() {
     const containerClient = this.blobServiceClient.getContainerClient(this.containerName);
-    await containerClient.createIfNotExists();
-    return containerClient;
-  }
-
-  private async getModelContainerClient() {
-    const containerClient = this.blobServiceClient.getContainerClient(this.modelContainerName);
-    await containerClient.createIfNotExists();
+    // Acceso anónimo a nivel "blob" (lectura pública por URL), como el contenedor de tiendas.
+    await containerClient.createIfNotExists({ access: 'blob' });
     return containerClient;
   }
 
@@ -161,8 +155,9 @@ export class ProductMediaService {
   ): Promise<string> {
     this.validateImageFile(file, variant);
     const extension = this.extensionFor(file);
+    // products/<id>/images/<front|left|back>.<ext> (nombre fijo por vista → se sobrescribe al actualizar).
     return this.uploadBuffer(
-      `products/${productId}/${variant}.${extension}`,
+      `${productId}/images/${variant}.${extension}`,
       file.buffer,
       file.mimetype,
     );
@@ -233,11 +228,11 @@ export class ProductMediaService {
       return artifact.value;
     }
 
+    // products/<id>/models/model.glb (nombre fijo → un solo modelo por producto, se sobrescribe).
     return this.uploadBuffer(
-      `models/${productId}/${artifact.fileName ?? 'product-model.glb'}`,
+      `${productId}/models/model.glb`,
       Buffer.from(artifact.value, 'base64'),
       artifact.contentType ?? 'model/gltf-binary',
-      this.getModelContainerClient(),
     );
   }
 
@@ -269,11 +264,11 @@ export class ProductMediaService {
     // response.data es ya un arraybuffer, conviertelo a Buffer
     const glbBuffer = Buffer.from(response.data);
 
+    // products/<id>/models/model.glb (nombre fijo → un solo modelo por producto, se sobrescribe).
     return this.uploadBuffer(
-      `models/${productId}/product-model.glb`,
+      `${productId}/models/model.glb`,
       glbBuffer,
       'model/gltf-binary',
-      this.getModelContainerClient(),
     );
   }
 }
