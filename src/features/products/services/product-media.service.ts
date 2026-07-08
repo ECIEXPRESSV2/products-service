@@ -236,6 +236,21 @@ export class ProductMediaService {
     );
   }
 
+  async checkAvailability(): Promise<boolean> {
+    if (!this.aiGenerateUrl) return false;
+    try {
+      await axios.head(this.aiGenerateUrl, { timeout: 5000 });
+      return true;
+    } catch {
+      try {
+        await axios.get(this.aiGenerateUrl, { timeout: 5000 });
+        return true;
+      } catch {
+        return false;
+      }
+    }
+  }
+
   async generateAndUploadModel3d(productId: string, files: ProductImageSet): Promise<string> {
     if (!this.aiGenerateUrl) {
       throw new Error('PRODUCT_AI_GENERATE_URL no está configurada');

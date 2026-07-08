@@ -288,4 +288,10 @@ export class ProductRepository implements IProductRepository {
   countActiveByCategory(categoryId: string): Promise<number> {
     return this.orm.count({ where: { categoryId, isActive: true } });
   }
+
+  findFailedGenerations(): Promise<Product[]> {
+    return this.orm.find({
+      where: { modelGenerationStatus: ProductGenerationStatus.FAILED },
+    });
+  }
 }

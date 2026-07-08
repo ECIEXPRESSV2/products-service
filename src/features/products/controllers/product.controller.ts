@@ -53,6 +53,7 @@ import { RequireRoles } from '../../../common/decorators/require-roles.decorator
 import { CurrentUser } from '../../../common/decorators/current-user.decorator';
 import type { AuthenticatedUser } from '../../../common/guards/gateway-auth.guard';
 import type { ProductImageFiles } from '../product-assets.types';
+import { ProductMediaService } from '../services/product-media.service';
 
 const STORE_ID_EXAMPLE = 'f47ac10b-58cc-4372-a567-0e02b2c3d479';
 const PRODUCT_ID_EXAMPLE = 'b2cc188e-9bf9-4888-aa12-ace4e6543111';
@@ -67,6 +68,7 @@ export class ProductController {
   constructor(
     @Inject(PRODUCT_SERVICE)
     private readonly productService: IProductService,
+    private readonly productMediaService: ProductMediaService,
   ) {}
 
   // ── Consultas ────────────────────────────────────────────────────────────
@@ -345,6 +347,34 @@ export class ProductController {
   }
 
   // ── Eliminación (soft delete) ────────────────────────────────────────────
+
+  @Get('ai-health')
+  @Public()
+  @ApiOperation({
+    summary: 'Verificar disponibilidad del servicio de IA para generar modelos 3D',
+    description: 'Hace un ping al servicio de IA y retorna si está disponible.',
+  })
+  @ApiOkResponse({ description: 'Estado del servicio de IA' })
+  async checkAiHealth(): Promise<{ available: boolean }> {
+    const available = await this.productMediaService.checkAvailability();
+    return { available };
+  }
+
+  @Post(':id/retry-3d')
+  @RequireRoles('VENDOR', 'ADMIN')
+  @ApiOperation({
+    summary: 'Reintentar generación de modelo 3D para un producto fallido',
+    description: 'Reintenta la generación del modelo 3D usando las imágenes ya subidas.',
+  })
+  @ApiParam({ name: 'id', type: String, format: 'uuid', example: PRODUCT_ID_EXAMPLE })
+  @ApiOkResponse({ description: 'Producto con modelo 3D regenerado', type: Product })
+  @ApiNotFoundResponse({ description: 'Producto no encontrado o sin imágenes' })
+  @ApiConflictResponse({ description: 'El producto no está en estado FAILED' })
+  async retryModel3d(
+    @Param('id', ParseUUIDPipe) id: string,
+  ): Promise<Product> {
+    return this.productService.retryModelGeneration(id);
+  }
 
   @Delete(':id')
   @RequireRoles('VENDOR', 'ADMIN')
