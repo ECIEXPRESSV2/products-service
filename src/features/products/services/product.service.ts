@@ -1,4 +1,5 @@
 import { ConflictException, Inject, Injectable, NotFoundException } from '@nestjs/common';
+import axios from 'axios';
 import type { LoggerService } from '@nestjs/common';
 import { WINSTON_MODULE_NEST_PROVIDER } from 'nest-winston';
 import { IProductService } from './product.service.interface';
@@ -25,7 +26,7 @@ import { PROMOTION_SERVICE } from '../../promotions/services/promotion.service.i
 import { ProductWithPricingDto } from '../dto/product-with-pricing.dto';
 import { ProductMediaService } from './product-media.service';
 import { ProductGenerationStatus } from '../product-generation-status';
-import type { ProductImageFiles, ProductImageSet } from '../product-assets.types';
+import type { ProductImageFile, ProductImageFiles, ProductImageSet } from '../product-assets.types';
 
 @Injectable()
 export class ProductService implements IProductService {
@@ -632,6 +633,89 @@ export class ProductService implements IProductService {
       throw new NotFoundException(`Producto con id "${id}" no encontrado`);
     }
     return product;
+  }
+
+  async retryModelGeneration(id: string): Promise<Product> {
+    const product = await this.findByIdRaw(id);
+    if (product.modelGenerationStatus !== ProductGenerationStatus.FAILED) {
+      throw new ConflictException('Solo se pueden reintentar generaciones fallidas');
+    }
+    if (!product.frontImageUrl || !product.leftImageUrl || !product.backImageUrl) {
+      throw new NotFoundException('El producto no tiene las imágenes necesarias para generar el modelo 3D');
+    }
+
+    const downloadImage = async (url: string): Promise<Buffer> => {
+      const response = await axios.get(url, {
+        responseType: 'arraybuffer',
+        validateStatus: (status) => status >= 200 && status < 300,
+      });
+      return Buffer.from(response.data);
+    };
+
+    const [frontBuf, leftBuf, backBuf] = await Promise.all([
+      downloadImage(product.frontImageUrl),
+      downloadImage(product.leftImageUrl),
+      downloadImage(product.backImageUrl),
+    ]);
+
+    const files: ProductImageSet = {
+      front: { buffer: frontBuf, mimetype: 'image/png', originalname: 'front.png' } as ProductImageFile,
+      left: { buffer: leftBuf, mimetype: 'image/png', originalname: 'left.png' } as ProductImageFile,
+      back: { buffer: backBuf, mimetype: 'image/png', originalname: 'back.png' } as ProductImageFile,
+    };
+
+    await this.productRepository.update(id, {
+      modelGenerationStatus: ProductGenerationStatus.PROCESSING,
+      modelGenerationProgress: 0,
+      modelGenerationError: null,
+    } as any);
+
+    try {
+      const model3dUrl = await this.productMediaService.generateAndUploadModel3d(id, files);
+      const updated = await this.productRepository.update(id, {
+        model3dUrl,
+        modelGenerationStatus: ProductGenerationStatus.READY,
+        modelGenerationProgress: 100,
+        modelGenerationError: null,
+      } as any);
+      if (!updated) throw new NotFoundException(`Producto con id "${id}" no encontrado`);
+
+      this.publisher.productUpdated({
+        id: updated.id,
+        storeId: updated.storeId,
+        imageUrl: updated.imageUrl,
+        frontImageUrl: updated.frontImageUrl,
+        leftImageUrl: updated.leftImageUrl,
+        backImageUrl: updated.backImageUrl,
+        model3dUrl: updated.model3dUrl,
+        modelGenerationStatus: updated.modelGenerationStatus,
+        modelGenerationProgress: updated.modelGenerationProgress,
+        modelGenerationError: updated.modelGenerationError,
+      });
+
+      return this.makeMediaAccessible(updated);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Error desconocido';
+      const failed = await this.productRepository.update(id, {
+        modelGenerationStatus: ProductGenerationStatus.FAILED,
+        modelGenerationProgress: 100,
+        modelGenerationError: message,
+      } as any);
+      if (failed) {
+        this.publisher.productUpdated({
+          id,
+          storeId: failed.storeId,
+          modelGenerationStatus: ProductGenerationStatus.FAILED,
+          modelGenerationProgress: 100,
+          modelGenerationError: message,
+        });
+      }
+      throw error;
+    }
+  }
+
+  async findFailedGenerations(): Promise<Product[]> {
+    return this.productRepository.findFailedGenerations();
   }
 
   private makeMediaAccessible<T extends Product | Product[]>(value: T): T {
