@@ -48,6 +48,7 @@ export interface IProductRepository {
   setActive(id: string, isActive: boolean): Promise<Product | null>;
   existsById(id: string): Promise<boolean>;
   countActiveByCategory(categoryId: string): Promise<number>;
+  findFailedGenerations(): Promise<Product[]>;
 }
 
 export const PRODUCT_REPOSITORY = Symbol('IProductRepository');

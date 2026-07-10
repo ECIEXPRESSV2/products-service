@@ -31,6 +31,8 @@ export interface IProductService {
   restoreStock(productId: string, quantity: number, orderId: string): Promise<void>;
   confirmReservation(productId: string, quantity: number, orderId: string): Promise<void>;
   remove(id: string, performedBy?: string): Promise<void>;
+  retryModelGeneration(id: string): Promise<Product>;
+  findFailedGenerations(): Promise<Product[]>;
 }
 
 export const PRODUCT_SERVICE = Symbol('IProductService');

@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { ScheduleModule } from '@nestjs/schedule';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Product } from './entities/product.entity';
 import { ProductRepository } from './repositories/product.repository';
@@ -16,9 +17,11 @@ import { InventoryModule } from '../inventory/inventory.module';
 import { StoresModule } from '../stores/stores.module';
 import { PromotionsModule } from '../promotions/promotions.module';
 import { ProductMediaService } from './services/product-media.service';
+import { ModelRetryScheduler } from './services/model-retry.scheduler';
 
 @Module({
   imports: [
+    ScheduleModule.forRoot(),
     TypeOrmModule.forFeature([Product, Category]),
     AuditModule,
     CategoriesModule,
@@ -36,6 +39,7 @@ import { ProductMediaService } from './services/product-media.service';
     // CategoryRepository se necesita en ProductService para validar pertenencia a la tienda.
     // Se registra localmente en lugar de depender del export de CategoriesModule (que exporta solo el servicio).
     { provide: CATEGORY_REPOSITORY, useClass: CategoryRepository },
+    ModelRetryScheduler,
   ],
   exports: [PRODUCT_SERVICE],
 })
