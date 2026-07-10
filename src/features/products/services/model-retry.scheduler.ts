@@ -1,16 +1,21 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import { Cron, CronExpression } from '@nestjs/schedule';
+import { Cron } from '@nestjs/schedule';
 import { PRODUCT_REPOSITORY } from '../repositories/product.repository.interface';
 import type { IProductRepository } from '../repositories/product.repository.interface';
 import { ProductGenerationStatus } from '../product-generation-status';
 import { ProductMediaService } from './product-media.service';
 import axios from 'axios';
 import type { ProductImageFile, ProductImageSet } from '../product-assets.types';
-import { ConflictException, NotFoundException } from '@nestjs/common';
+import { NotFoundException } from '@nestjs/common';
+
+const RETRY_INTERVAL_MS = 5 * 60 * 1000;
+const MAX_RETRY_CYCLES = 12;
 
 @Injectable()
 export class ModelRetryScheduler {
   private readonly logger = new Logger(ModelRetryScheduler.name);
+  private retryTimer: ReturnType<typeof setInterval> | null = null;
+  private retryCycleCount = 0;
 
   constructor(
     @Inject(PRODUCT_REPOSITORY)
@@ -18,16 +23,44 @@ export class ModelRetryScheduler {
     private readonly productMediaService: ProductMediaService,
   ) {}
 
-  @Cron(CronExpression.EVERY_DAY_AT_8AM)
-  async retryFailedModels(): Promise<void> {
-    this.logger.log('Iniciando reintento diario de modelos 3D fallidos…');
+  @Cron('0 8 * * *')
+  async openRetryWindow(): Promise<void> {
+    this.logger.log('Ventana de reintento 3D abierta (8:00 AM)');
+    this.closeRetryWindow();
+    this.retryCycleCount = 0;
+
+    await this.retryFailedModels();
+
+    this.retryTimer = setInterval(async () => {
+      this.retryCycleCount++;
+
+      if (this.retryCycleCount >= MAX_RETRY_CYCLES) {
+        this.closeRetryWindow();
+        this.logger.log('Ventana de reintento 3D cerrada (9:00 AM)');
+        return;
+      }
+
+      await this.retryFailedModels();
+    }, RETRY_INTERVAL_MS);
+  }
+
+  private closeRetryWindow(): void {
+    if (this.retryTimer) {
+      clearInterval(this.retryTimer);
+      this.retryTimer = null;
+    }
+  }
+
+  private async retryFailedModels(): Promise<void> {
     try {
       const failed = await this.productRepository.findFailedGenerations();
       if (failed.length === 0) {
-        this.logger.log('No hay productos con generación 3D fallida');
+        this.logger.log('No hay productos con generación 3D fallida — cerrando ventana');
+        this.closeRetryWindow();
         return;
       }
-      this.logger.log(`Reintentando ${failed.length} producto(s)…`);
+      const remainingCycles = MAX_RETRY_CYCLES - this.retryCycleCount;
+      this.logger.log(`Reintentando ${failed.length} producto(s)… (ventana: ciclo ${this.retryCycleCount + 1}/${MAX_RETRY_CYCLES}, quedan ${remainingCycles} intento(s))`);
       let succeeded = 0;
       for (const product of failed) {
         try {
@@ -39,7 +72,7 @@ export class ModelRetryScheduler {
           );
         }
       }
-      this.logger.log(`Reintento completado: ${succeeded}/${failed.length} exitosos`);
+      this.logger.log(`Ciclo completado: ${succeeded}/${failed.length} exitosos`);
     } catch (error) {
       this.logger.error({ err: error }, 'Error en el reintento diario de modelos 3D');
     }
