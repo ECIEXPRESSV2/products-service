@@ -8,6 +8,7 @@ import { CreateProductDto } from '../dto/create-product.dto';
 import { StockOperation } from '../dto/adjust-stock.dto';
 import { PaginatedProductResult } from '../dto/paginated-result.dto';
 import { ProductGenerationStatus } from '../product-generation-status';
+import { ProductMediaService } from '../services/product-media.service';
 
 const STORE_ID = 'f47ac10b-58cc-4372-a567-0e02b2c3d479';
 const PRODUCT_ID = 'b2cc188e-9bf9-4888-aa12-ace4e6543111';
@@ -92,9 +93,16 @@ describe('ProductController', () => {
       remove: jest.fn(),
     };
 
+    const productMediaServiceMock: Partial<jest.Mocked<ProductMediaService>> = {
+      checkAvailability: jest.fn(),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       controllers: [ProductController],
-      providers: [{ provide: PRODUCT_SERVICE, useValue: serviceMock }],
+      providers: [
+        { provide: PRODUCT_SERVICE, useValue: serviceMock },
+        { provide: ProductMediaService, useValue: productMediaServiceMock },
+      ],
     }).compile();
 
     controller = module.get(ProductController);
