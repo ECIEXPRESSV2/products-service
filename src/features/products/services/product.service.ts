@@ -201,17 +201,24 @@ export class ProductService implements IProductService {
         modelGenerationProgress: 35,
       } as any);
 
-      const leftImageUrl = await this.productMediaService.uploadProductImage(productId, 'left', files.left);
-      await this.productRepository.update(productId, {
-        leftImageUrl,
-        modelGenerationProgress: 55,
-      } as any);
+      // Modo una sola foto: sin vistas lateral/trasera se salta directo a la generación 3D.
+      let leftImageUrl: string | null = null;
+      if (files.left) {
+        leftImageUrl = await this.productMediaService.uploadProductImage(productId, 'left', files.left);
+        await this.productRepository.update(productId, {
+          leftImageUrl,
+          modelGenerationProgress: 55,
+        } as any);
+      }
 
-      const backImageUrl = await this.productMediaService.uploadProductImage(productId, 'back', files.back);
-      await this.productRepository.update(productId, {
-        backImageUrl,
-        modelGenerationProgress: 70,
-      } as any);
+      let backImageUrl: string | null = null;
+      if (files.back) {
+        backImageUrl = await this.productMediaService.uploadProductImage(productId, 'back', files.back);
+        await this.productRepository.update(productId, {
+          backImageUrl,
+          modelGenerationProgress: 70,
+        } as any);
+      }
 
       const model3dUrl = await this.productMediaService.generateAndUploadModel3d(productId, files);
 
@@ -526,9 +533,12 @@ export class ProductService implements IProductService {
     this.logger.log(`Removing product id=${id}`, ProductService.name);
     const product = await this.findByIdRaw(id);
 
-    await this.productRepository.softDelete(id);
+    // Borrado físico: libera el slug/SKU para que el vendedor pueda recrear el
+    // producto. El historial queda en audit_logs (beforeData) y los consumidores
+    // reciben product.deleted como siempre.
+    await this.productRepository.deleteById(id);
 
-    this.logger.log(`Product soft-deleted id=${id}`, ProductService.name);
+    this.logger.log(`Product deleted id=${id}`, ProductService.name);
 
     await this.auditService.log({
       entityName: 'Product',
@@ -640,7 +650,7 @@ export class ProductService implements IProductService {
     if (product.modelGenerationStatus !== ProductGenerationStatus.FAILED) {
       throw new ConflictException('Solo se pueden reintentar generaciones fallidas');
     }
-    if (!product.frontImageUrl || !product.leftImageUrl || !product.backImageUrl) {
+    if (!product.frontImageUrl) {
       throw new NotFoundException('El producto no tiene las imágenes necesarias para generar el modelo 3D');
     }
 
@@ -652,16 +662,23 @@ export class ProductService implements IProductService {
       return Buffer.from(response.data);
     };
 
+    // Reconstruye el mismo set con el que se creó el producto: solo frontal
+    // (modo una foto) o las 3 vistas si existen.
+    const hasAllViews = Boolean(product.leftImageUrl && product.backImageUrl);
     const [frontBuf, leftBuf, backBuf] = await Promise.all([
       downloadImage(product.frontImageUrl),
-      downloadImage(product.leftImageUrl),
-      downloadImage(product.backImageUrl),
+      hasAllViews ? downloadImage(product.leftImageUrl!) : Promise.resolve(null),
+      hasAllViews ? downloadImage(product.backImageUrl!) : Promise.resolve(null),
     ]);
 
     const files: ProductImageSet = {
       front: { buffer: frontBuf, mimetype: 'image/png', originalname: 'front.png' } as ProductImageFile,
-      left: { buffer: leftBuf, mimetype: 'image/png', originalname: 'left.png' } as ProductImageFile,
-      back: { buffer: backBuf, mimetype: 'image/png', originalname: 'back.png' } as ProductImageFile,
+      ...(leftBuf && backBuf
+        ? {
+            left: { buffer: leftBuf, mimetype: 'image/png', originalname: 'left.png' } as ProductImageFile,
+            back: { buffer: backBuf, mimetype: 'image/png', originalname: 'back.png' } as ProductImageFile,
+          }
+        : {}),
     };
 
     await this.productRepository.update(id, {

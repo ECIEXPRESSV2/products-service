@@ -44,10 +44,16 @@ export interface IProductRepository {
    * atómicamente. Devuelve `null` si el producto no existe.
    */
   incrementStock(id: string, quantity: number): Promise<Product | null>;
-  softDelete(id: string): Promise<boolean>;
+  /**
+   * Borrado físico de la fila (libera slug/SKU para recrear el producto).
+   * Para ocultar temporalmente un producto úsese `setActive(id, false)`.
+   */
+  deleteById(id: string): Promise<boolean>;
   setActive(id: string, isActive: boolean): Promise<Product | null>;
   existsById(id: string): Promise<boolean>;
   countActiveByCategory(categoryId: string): Promise<number>;
+  /** Cuenta todos los productos de la categoría, activos o no (guard del borrado de categorías). */
+  countByCategory(categoryId: string): Promise<number>;
   findFailedGenerations(): Promise<Product[]>;
 }
 

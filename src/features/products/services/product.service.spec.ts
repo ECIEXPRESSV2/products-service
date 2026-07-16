@@ -94,7 +94,6 @@ describe('ProductService', () => {
       findBySlugAndStore: jest.fn(),
       findBySkuAndStore: jest.fn(),
       create: jest.fn(),
-      createWithAssets: jest.fn(),
       update: jest.fn(),
       setStock: jest.fn(),
       tryReserveStock: jest.fn(),
@@ -102,9 +101,11 @@ describe('ProductService', () => {
       releaseReservation: jest.fn(),
       incrementStock: jest.fn(),
       setActive: jest.fn(),
-      softDelete: jest.fn(),
+      deleteById: jest.fn(),
       existsById: jest.fn(),
       countActiveByCategory: jest.fn(),
+      countByCategory: jest.fn(),
+      findFailedGenerations: jest.fn(),
     };
 
     const categoryRepoMock: jest.Mocked<ICategoryRepository> = {
@@ -115,7 +116,7 @@ describe('ProductService', () => {
       findChildrenOf: jest.fn(),
       create: jest.fn(),
       update: jest.fn(),
-      softDelete: jest.fn(),
+      deleteById: jest.fn(),
       existsById: jest.fn(),
     };
 
@@ -737,14 +738,14 @@ describe('ProductService', () => {
   // ── remove ───────────────────────────────────────────────────────────────
 
   describe('remove', () => {
-    it('soft-deletes product, saves audit log and publishes event', async () => {
+    it('deletes product, saves audit log and publishes event', async () => {
       const product = makeProduct();
       repo.findById.mockResolvedValue(product);
-      repo.softDelete.mockResolvedValue(true);
+      repo.deleteById.mockResolvedValue(true);
 
       await service.remove(PRODUCT_ID);
 
-      expect(repo.softDelete).toHaveBeenCalledWith(PRODUCT_ID);
+      expect(repo.deleteById).toHaveBeenCalledWith(PRODUCT_ID);
       expect(auditService.log).toHaveBeenCalledWith(
         expect.objectContaining({ action: 'DELETE', entityName: 'Product' }),
       );
