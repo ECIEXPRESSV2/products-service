@@ -80,8 +80,12 @@ export class CategoryRepository implements ICategoryRepository {
     return this.orm.save(updated);
   }
 
-  async softDelete(id: string): Promise<boolean> {
-    const result = await this.orm.update(id, { isActive: false });
+  /**
+   * Borrado FÍSICO: elimina la fila para liberar el slug y que la categoría
+   * pueda recrearse. Las subcategorías quedan con parent_id = NULL (FK SET NULL).
+   */
+  async deleteById(id: string): Promise<boolean> {
+    const result = await this.orm.delete(id);
     return (result.affected ?? 0) > 0;
   }
 

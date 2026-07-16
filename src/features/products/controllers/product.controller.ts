@@ -262,9 +262,10 @@ export class ProductController {
   )
   @ApiConsumes('multipart/form-data')
   @ApiOperation({
-    summary: 'Crear un producto con 3 imágenes obligatorias y disparar la generación 3D',
+    summary: 'Crear un producto con imágenes (frontal sola o las 3 vistas) y disparar la generación 3D',
     description:
-      'Crea el producto y procesa en segundo plano las imágenes frontal, lateral y trasera para generar el modelo 3D.',
+      'Crea el producto y procesa las imágenes en segundo plano para generar el modelo 3D. ' +
+      'Acepta solo la imagen frontal (modelo de una vista) o las 3 vistas frontal, lateral y trasera (modelo más preciso).',
   })
   @ApiCreatedResponse({ description: 'Producto creado y procesado en segundo plano', type: Product })
   @ApiBadRequestResponse({ description: 'Datos de entrada inválidos o imágenes faltantes' })

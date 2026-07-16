@@ -65,15 +65,21 @@ export class ProductMediaService {
     const left = files.left?.[0];
     const back = files.back?.[0];
 
-    if (!front || !left || !back) {
-      throw new BadRequestException('Debes subir 3 imágenes: frontal, lateral y trasera');
+    if (!front) {
+      throw new BadRequestException('Debes subir al menos la imagen frontal del producto');
+    }
+
+    // Dos modos válidos: solo frontal (1 foto) o las 3 vistas completas. Una
+    // vista lateral/trasera suelta no sirve para el modelo multivista.
+    if ((left && !back) || (!left && back)) {
+      throw new BadRequestException('Para el modo de 3 vistas debes subir las imágenes lateral y trasera además de la frontal');
     }
 
     this.validateImageFile(front, 'frontal');
-    this.validateImageFile(left, 'lateral');
-    this.validateImageFile(back, 'trasera');
+    if (left) this.validateImageFile(left, 'lateral');
+    if (back) this.validateImageFile(back, 'trasera');
 
-    return { front, left, back };
+    return left && back ? { front, left, back } : { front };
   }
 
   private validateImageFile(file: ProductImageFile, label: string): void {
@@ -163,11 +169,11 @@ export class ProductMediaService {
     );
   }
 
-  async uploadProductImages(productId: string, files: ProductImageSet): Promise<Record<ProductImageVariant, string>> {
+  async uploadProductImages(productId: string, files: ProductImageSet): Promise<Partial<Record<ProductImageVariant, string>>> {
     const [front, left, back] = await Promise.all([
       this.uploadProductImage(productId, 'front', files.front),
-      this.uploadProductImage(productId, 'left', files.left),
-      this.uploadProductImage(productId, 'back', files.back),
+      files.left ? this.uploadProductImage(productId, 'left', files.left) : Promise.resolve(undefined),
+      files.back ? this.uploadProductImage(productId, 'back', files.back) : Promise.resolve(undefined),
     ]);
 
     return { front, left, back };
@@ -256,12 +262,21 @@ export class ProductMediaService {
       throw new Error('PRODUCT_AI_GENERATE_URL no está configurada');
     }
 
+    // Con las 3 vistas se usa el pipeline multivista (`images`); con solo la
+    // frontal, el pipeline de una imagen (`image`) que el servidor de IA también acepta.
+    const imagePayload =
+      files.left && files.back
+        ? {
+            images: {
+              front: Buffer.from(files.front.buffer).toString('base64'),
+              left: Buffer.from(files.left.buffer).toString('base64'),
+              back: Buffer.from(files.back.buffer).toString('base64'),
+            },
+          }
+        : { image: Buffer.from(files.front.buffer).toString('base64') };
+
     const payload = {
-      images: {
-        front: Buffer.from(files.front.buffer).toString('base64'),
-        left: Buffer.from(files.left.buffer).toString('base64'),
-        back: Buffer.from(files.back.buffer).toString('base64'),
-      },
+      ...imagePayload,
       texture: true,
       num_inference_steps: 50,
       guidance_scale: 7.5,

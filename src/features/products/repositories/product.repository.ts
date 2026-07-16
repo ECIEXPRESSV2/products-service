@@ -276,8 +276,13 @@ export class ProductRepository implements IProductRepository {
     return this.orm.findOne({ where: { id }, relations: { category: true } });
   }
 
-  async softDelete(id: string): Promise<boolean> {
-    const result = await this.orm.update(id, { isActive: false });
+  /**
+   * Borrado FÍSICO: elimina la fila para liberar el slug/SKU y que el producto
+   * pueda recrearse. Las referencias en cart_lines/inventory_movements son
+   * columnas planas (sin FK) y el historial queda en audit_logs.
+   */
+  async deleteById(id: string): Promise<boolean> {
+    const result = await this.orm.delete(id);
     return (result.affected ?? 0) > 0;
   }
 
@@ -287,6 +292,14 @@ export class ProductRepository implements IProductRepository {
 
   countActiveByCategory(categoryId: string): Promise<number> {
     return this.orm.count({ where: { categoryId, isActive: true } });
+  }
+
+  /**
+   * Cuenta TODOS los productos de la categoría (activos o no): cualquier fila
+   * bloquea el borrado físico de la categoría por la FK RESTRICT de category_id.
+   */
+  countByCategory(categoryId: string): Promise<number> {
+    return this.orm.count({ where: { categoryId } });
   }
 
   findFailedGenerations(): Promise<Product[]> {

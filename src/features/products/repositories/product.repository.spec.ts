@@ -1,6 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
-import { Repository, SelectQueryBuilder, UpdateResult } from 'typeorm';
+import { DeleteResult, Repository, SelectQueryBuilder, UpdateResult } from 'typeorm';
 import { ProductRepository } from './product.repository';
 import { Product } from '../entities/product.entity';
 import { Category } from '../../categories/entities/category.entity';
@@ -75,6 +75,7 @@ describe('ProductRepository', () => {
       save: jest.fn(),
       merge: jest.fn(),
       update: jest.fn(),
+      delete: jest.fn(),
       existsBy: jest.fn(),
       count: jest.fn(),
       createQueryBuilder: jest.fn(),
@@ -519,20 +520,20 @@ describe('ProductRepository', () => {
     });
   });
 
-  // ── softDelete ───────────────────────────────────────────────────────────
+  // ── deleteById ───────────────────────────────────────────────────────────
 
-  describe('softDelete', () => {
-    it('sets isActive to false and returns true when affected', async () => {
-      orm.update.mockResolvedValue({ affected: 1 } as UpdateResult);
+  describe('deleteById', () => {
+    it('deletes the row and returns true when affected', async () => {
+      orm.delete.mockResolvedValue({ affected: 1 } as DeleteResult);
 
-      expect(await repository.softDelete(PRODUCT_ID)).toBe(true);
-      expect(orm.update).toHaveBeenCalledWith(PRODUCT_ID, { isActive: false });
+      expect(await repository.deleteById(PRODUCT_ID)).toBe(true);
+      expect(orm.delete).toHaveBeenCalledWith(PRODUCT_ID);
     });
 
     it('returns false when no row was affected', async () => {
-      orm.update.mockResolvedValue({ affected: 0 } as UpdateResult);
+      orm.delete.mockResolvedValue({ affected: 0 } as DeleteResult);
 
-      expect(await repository.softDelete('non-existent')).toBe(false);
+      expect(await repository.deleteById('non-existent')).toBe(false);
     });
   });
 
