@@ -91,6 +91,9 @@ describe('ProductController', () => {
       restoreStock: jest.fn(),
       confirmReservation: jest.fn(),
       remove: jest.fn(),
+      findByIdRaw: jest.fn(),
+      retryModelGeneration: jest.fn(),
+      findFailedGenerations: jest.fn(),
     };
 
     const productMediaServiceMock: Partial<jest.Mocked<ProductMediaService>> = {

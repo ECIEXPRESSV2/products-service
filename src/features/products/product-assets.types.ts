@@ -12,10 +12,12 @@ export interface ProductImageFiles {
   back?: ProductImageFile[];
 }
 
+// `left`/`back` son opcionales: el vendedor puede crear el producto con solo la
+// foto frontal (modelo 3D de una vista) o con las 3 vistas (modelo más preciso).
 export interface ProductImageSet {
   front: ProductImageFile;
-  left: ProductImageFile;
-  back: ProductImageFile;
+  left?: ProductImageFile;
+  back?: ProductImageFile;
 }
 
 export interface GeneratedModelArtifact {

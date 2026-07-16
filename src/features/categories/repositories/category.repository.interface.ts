@@ -18,7 +18,8 @@ export interface ICategoryRepository {
   findChildrenOf(parentId: string): Promise<Category[]>;
   create(dto: CreateCategoryDto): Promise<Category>;
   update(id: string, dto: UpdateCategoryDto): Promise<Category | null>;
-  softDelete(id: string): Promise<boolean>;
+  /** Borrado físico de la fila (libera el slug para recrear la categoría). */
+  deleteById(id: string): Promise<boolean>;
   existsById(id: string): Promise<boolean>;
 }
 

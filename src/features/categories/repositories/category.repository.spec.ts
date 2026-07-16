@@ -1,6 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
-import { IsNull, Repository, UpdateResult } from 'typeorm';
+import { DeleteResult, IsNull, Repository, UpdateResult } from 'typeorm';
 import { CategoryRepository } from './category.repository';
 import { Category } from '../entities/category.entity';
 import { CreateCategoryDto } from '../dto/create-category.dto';
@@ -39,6 +39,7 @@ describe('CategoryRepository', () => {
       save: jest.fn(),
       merge: jest.fn(),
       update: jest.fn(),
+      delete: jest.fn(),
       existsBy: jest.fn(),
     } as unknown as jest.Mocked<Repository<Category>>;
 
@@ -200,20 +201,20 @@ describe('CategoryRepository', () => {
     });
   });
 
-  describe('softDelete', () => {
-    it('sets isActive to false and returns true when affected', async () => {
-      orm.update.mockResolvedValue({ affected: 1 } as UpdateResult);
+  describe('deleteById', () => {
+    it('deletes the row and returns true when affected', async () => {
+      orm.delete.mockResolvedValue({ affected: 1 } as DeleteResult);
 
-      const result = await categoryRepository.softDelete(CAT_ID);
+      const result = await categoryRepository.deleteById(CAT_ID);
 
-      expect(orm.update).toHaveBeenCalledWith(CAT_ID, { isActive: false });
+      expect(orm.delete).toHaveBeenCalledWith(CAT_ID);
       expect(result).toBe(true);
     });
 
     it('returns false when no row was affected', async () => {
-      orm.update.mockResolvedValue({ affected: 0 } as UpdateResult);
+      orm.delete.mockResolvedValue({ affected: 0 } as DeleteResult);
 
-      const result = await categoryRepository.softDelete('non-existent');
+      const result = await categoryRepository.deleteById('non-existent');
 
       expect(result).toBe(false);
     });

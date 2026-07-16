@@ -127,16 +127,18 @@ export class CategoryService implements ICategoryService {
       );
     }
 
-    const activeProductCount = await this.productRepository.countActiveByCategory(id);
-    if (activeProductCount > 0) {
+    // Se cuentan TODOS los productos (activos o no): el borrado ahora es físico y
+    // cualquier fila que referencie la categoría lo bloquearía por la FK RESTRICT.
+    const productCount = await this.productRepository.countByCategory(id);
+    if (productCount > 0) {
       throw new ConflictException(
-        `La categoría tiene ${activeProductCount} producto(s) activo(s). Elimínalos o muévelos primero.`,
+        `La categoría tiene ${productCount} producto(s). Elimínalos o muévelos primero.`,
       );
     }
 
-    await this.categoryRepository.softDelete(id);
+    await this.categoryRepository.deleteById(id);
 
-    this.logger.log(`Category soft-deleted id=${id}`, CategoryService.name);
+    this.logger.log(`Category deleted id=${id}`, CategoryService.name);
 
     await this.auditService.log({
       entityName: 'Category',

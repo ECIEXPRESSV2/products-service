@@ -50,7 +50,7 @@ describe('CategoryService', () => {
       findChildrenOf: jest.fn(),
       create: jest.fn(),
       update: jest.fn(),
-      softDelete: jest.fn(),
+      deleteById: jest.fn(),
       existsById: jest.fn(),
     };
 
@@ -72,9 +72,11 @@ describe('CategoryService', () => {
       releaseReservation: jest.fn(),
       incrementStock: jest.fn(),
       setActive: jest.fn(),
-      softDelete: jest.fn(),
+      deleteById: jest.fn(),
       existsById: jest.fn(),
       countActiveByCategory: jest.fn().mockResolvedValue(0),
+      countByCategory: jest.fn().mockResolvedValue(0),
+      findFailedGenerations: jest.fn(),
     };
 
     const publisherMock = {
@@ -286,15 +288,15 @@ describe('CategoryService', () => {
   // ── remove ───────────────────────────────────────────────────────────────
 
   describe('remove', () => {
-    it('soft-deletes category, saves audit log, and publishes event', async () => {
+    it('deletes category, saves audit log, and publishes event', async () => {
       const category = makeCategory();
       repo.findById.mockResolvedValue(category);
       repo.findChildrenOf.mockResolvedValue([]);
-      repo.softDelete.mockResolvedValue(true);
+      repo.deleteById.mockResolvedValue(true);
 
       await service.remove(CAT_ID);
 
-      expect(repo.softDelete).toHaveBeenCalledWith(CAT_ID);
+      expect(repo.deleteById).toHaveBeenCalledWith(CAT_ID);
       expect(auditService.log).toHaveBeenCalledWith(
         expect.objectContaining({ action: 'DELETE', entityName: 'Category' }),
       );
@@ -314,16 +316,16 @@ describe('CategoryService', () => {
       repo.findChildrenOf.mockResolvedValue([makeCategory({ id: 'child-1' })]);
 
       await expect(service.remove(CAT_ID)).rejects.toThrow(ConflictException);
-      expect(repo.softDelete).not.toHaveBeenCalled();
+      expect(repo.deleteById).not.toHaveBeenCalled();
     });
 
-    it('throws ConflictException when category has active products', async () => {
+    it('throws ConflictException when category has products (active or not)', async () => {
       repo.findById.mockResolvedValue(makeCategory());
       repo.findChildrenOf.mockResolvedValue([]);
-      productRepo.countActiveByCategory.mockResolvedValue(2);
+      productRepo.countByCategory.mockResolvedValue(2);
 
       await expect(service.remove(CAT_ID)).rejects.toThrow(ConflictException);
-      expect(repo.softDelete).not.toHaveBeenCalled();
+      expect(repo.deleteById).not.toHaveBeenCalled();
     });
   });
 });
